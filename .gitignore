@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+release/
+*.tsbuildinfo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env / secrets
+.env
+.env.local
+.env.*.local
+
+# Local dev runtime
+.taskpilot-dev/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Cache
+.cache/
+.eslintcache
+.parcel-cache/
+
+# Scratch / one-off scripts
+tmp/
+
+# Claude Code runtime state (lock files, sessions, etc — workflows + skills stay tracked)
+.claude/scheduled_tasks.lock
+.claude/sessions/

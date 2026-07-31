@@ -1,0 +1,50 @@
+{
+  "appId": "com.jackgierlich.taskpilot",
+  "productName": "TaskPilot",
+  "directories": {
+    "output": "release",
+    "buildResources": "build"
+  },
+  "files": [
+    "dist/**/*",
+    "dist/capture/**/*",
+    "drizzle/**/*",
+    "package.json"
+  ],
+  "extraMetadata": {
+    "main": "dist/main.cjs"
+  },
+  "asar": true,
+  "asarUnpack": [
+    "node_modules/better-sqlite3/**/*"
+  ],
+  "extraResources": [
+    {
+      "from": "scripts",
+      "to": "scripts",
+      "filter": [
+        "setup-auto-drain.ps1",
+        "teardown-auto-drain.ps1",
+        "run-ambient-deliberate.ps1"
+      ]
+    }
+  ],
+  "win": {
+    "target": ["nsis"],
+    "icon": "build/icon.png"
+  },
+  "mac": {
+    "target": ["dmg"],
+    "category": "public.app-category.productivity",
+    "icon": "build/icon.png"
+  },
+  "linux": {
+    "target": ["AppImage"],
+    "category": "Office",
+    "icon": "build/icon.png"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true
+  }
+}

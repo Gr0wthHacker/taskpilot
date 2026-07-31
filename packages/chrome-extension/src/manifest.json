@@ -1,0 +1,42 @@
+{
+  "manifest_version": 3,
+  "name": "TaskPilot Context Capture",
+  "version": "0.1.0",
+  "description": "Captures pages you visit and sends them to your local TaskPilot app as context observations.",
+  "minimum_chrome_version": "120",
+  "permissions": [
+    "tabs",
+    "activeTab",
+    "storage",
+    "scripting",
+    "alarms"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:7847/*",
+    "http://localhost:7847/*"
+  ],
+  "background": {
+    "service_worker": "background/service-worker.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "TaskPilot",
+    "default_popup": "popup/popup.html"
+  },
+  "options_ui": {
+    "page": "options/options.html",
+    "open_in_tab": true
+  },
+  "commands": {
+    "capture-current-page": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+Y",
+        "mac": "Command+Shift+Y"
+      },
+      "description": "Capture the current page to TaskPilot"
+    }
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}

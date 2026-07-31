@@ -1,0 +1,9 @@
+# Optional dependencies for knowledge-base text extraction.
+# Install with:  pip install -r scripts/requirements-knowledge.txt
+#
+# Without these, the knowledge base still works for .md/.txt/.csv/.json
+# (extracted natively in Node) and catalogs binary files by filename; PPTX/PDF/
+# DOCX text extraction just won't happen until they're installed.
+pypdf>=4.0
+python-docx>=1.1
+python-pptx>=0.6.23

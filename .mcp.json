@@ -1,0 +1,17 @@
+{
+  "//": "Filesystem MCP scope is INTENTIONALLY narrowed to the project source tree. Do NOT add ~/.taskpilot here — that would let any model with this MCP server write directly to io/execute/, bypassing TaskPilot's derive/approve/execute gate, and read the bearer token + encrypted OAuth blobs. TaskPilot's own MCP server (npm run mcp) is the supported path for that data.",
+  "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest"]
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "C:/Users/Jack/taskpilot"
+      ]
+    }
+  }
+}

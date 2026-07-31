@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self' 'unsafe-inline' data: blob:; connect-src 'self' http://localhost:7847 ws://localhost:5173 http://localhost:5173;"
+    />
+    <title>TaskPilot — Quick Capture</title>
+  </head>
+  <body
+    class="bg-[#0a0a0a] text-white antialiased"
+    style="background:#0a0a0a;color:#fafafa;margin:0;padding:0;"
+  >
+    <div id="capture-root"></div>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>

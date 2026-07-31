@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>TaskPilot options</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root {
+        color-scheme: light dark;
+        --fg: #0f172a;
+        --muted: #475569;
+        --bg: #f8fafc;
+        --card: #ffffff;
+        --border: #e2e8f0;
+        --accent: #0f766e;
+        --danger: #b91c1c;
+        --ok: #15803d;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --fg: #f1f5f9;
+          --muted: #94a3b8;
+          --bg: #0f172a;
+          --card: #1e293b;
+          --border: #334155;
+          --accent: #2dd4bf;
+        }
+      }
+      body {
+        font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+        background: var(--bg);
+        color: var(--fg);
+        margin: 0;
+        padding: 24px;
+      }
+      main {
+        max-width: 720px;
+        margin: 0 auto;
+      }
+      h1 {
+        font-size: 20px;
+        margin: 0 0 4px;
+      }
+      p.sub {
+        color: var(--muted);
+        margin: 0 0 24px;
+        font-size: 13px;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 16px;
+        margin-bottom: 16px;
+      }
+      label {
+        display: block;
+        font-weight: 600;
+        font-size: 13px;
+        margin-bottom: 6px;
+      }
+      .hint {
+        color: var(--muted);
+        font-size: 12px;
+        margin-top: 4px;
+      }
+      input[type="text"],
+      textarea {
+        width: 100%;
+        box-sizing: border-box;
+        font: inherit;
+        font-size: 13px;
+        padding: 8px 10px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--bg);
+        color: var(--fg);
+      }
+      textarea {
+        min-height: 100px;
+        font-family: ui-monospace, monospace;
+      }
+      .row {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+      .row label {
+        margin: 0;
+      }
+      button {
+        font: inherit;
+        font-size: 13px;
+        padding: 8px 14px;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        background: var(--accent);
+        color: white;
+        cursor: pointer;
+        font-weight: 600;
+      }
+      button.secondary {
+        background: transparent;
+        color: var(--fg);
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      .status {
+        margin-top: 12px;
+        font-size: 13px;
+      }
+      .status.ok {
+        color: var(--ok);
+      }
+      .status.err {
+        color: var(--danger);
+      }
+      .grid-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      @media (max-width: 600px) {
+        .grid-2 {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>TaskPilot Context Capture</h1>
+      <p class="sub">
+        Sends visited URLs + page titles to your local TaskPilot app
+        (<code id="base-url-label">http://127.0.0.1:7847</code>). Never leaves your machine.
+      </p>
+
+      <section class="card">
+        <label for="bearer-token">Bearer token</label>
+        <textarea
+          id="bearer-token"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="Paste contents of ~/.taskpilot/api-token"
+        ></textarea>
+        <p class="hint">
+          On macOS/Linux: <code>cat ~/.taskpilot/api-token</code>. On Windows:
+          <code>Get-Content $env:USERPROFILE\.taskpilot\api-token</code>. Stored only in
+          this browser's extension storage.
+        </p>
+      </section>
+
+      <section class="card">
+        <div class="row">
+          <input type="checkbox" id="enabled" />
+          <label for="enabled">Enabled</label>
+        </div>
+        <p class="hint">Uncheck to pause captures without uninstalling.</p>
+      </section>
+
+      <section class="card">
+        <label for="api-base-url">API base URL</label>
+        <input type="text" id="api-base-url" value="http://127.0.0.1:7847" />
+        <p class="hint">Change this only if TaskPilot is listening on a non-default host.</p>
+      </section>
+
+      <section class="card grid-2">
+        <div>
+          <label for="allowlist">URL allowlist (regex, one per line)</label>
+          <textarea id="allowlist" spellcheck="false"></textarea>
+          <p class="hint">Default <code>.*</code> matches everything HTTPS/HTTP.</p>
+        </div>
+        <div>
+          <label for="blocklist">URL blocklist (regex, one per line)</label>
+          <textarea id="blocklist" spellcheck="false"></textarea>
+          <p class="hint">Defaults include banks, login pages, password managers.</p>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="actions">
+          <button id="save">Save</button>
+          <button id="test" class="secondary">Test connection</button>
+        </div>
+        <div id="status" class="status"></div>
+      </section>
+    </main>
+    <script src="options.js"></script>
+  </body>
+</html>

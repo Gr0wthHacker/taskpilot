@@ -1,0 +1,127 @@
+/**
+ * Quick-capture window styles.
+ *
+ * Standalone — does NOT use the main app's Tailwind build. Keeping the CSS
+ * tiny means the capture window can paint immediately when the hotkey fires.
+ * Visual language matches the rest of TaskPilot (dark, mono spacing) but
+ * lives self-contained so future tweaks don't ripple into the main app.
+ */
+
+html,
+body,
+#capture-root {
+  margin: 0;
+  padding: 0;
+  background: #0a0a0a;
+  color: #fafafa;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    Arial,
+    sans-serif;
+  font-size: 14px;
+  height: 100%;
+  overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.capture-shell {
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100vh;
+  padding: 10px 14px;
+  border: 1px solid #2a2a2a;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #0d0d0d 0%, #0a0a0a 100%);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+}
+
+.capture-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+}
+
+.capture-input {
+  width: 100%;
+  height: 36px;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #fafafa;
+  font-size: 16px;
+  font-weight: 500;
+  padding: 0 4px;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.capture-input::placeholder {
+  color: #6a6a6a;
+}
+
+.capture-textarea {
+  width: 100%;
+  flex: 1;
+  background: #111;
+  border: 1px solid #2a2a2a;
+  border-radius: 6px;
+  color: #fafafa;
+  padding: 6px 8px;
+  font-size: 13px;
+  font-family: inherit;
+  resize: none;
+  outline: none;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.capture-textarea::placeholder {
+  color: #6a6a6a;
+}
+
+.capture-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.capture-hint {
+  font-size: 11px;
+  color: #888;
+  letter-spacing: 0.01em;
+}
+
+.capture-submit {
+  height: 26px;
+  padding: 0 12px;
+  background: #fafafa;
+  color: #0a0a0a;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.capture-submit:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.capture-error {
+  margin: 0;
+  font-size: 11px;
+  color: #f87171;
+}
