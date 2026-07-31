@@ -4,7 +4,7 @@
 
 TaskPilot runs entirely on your machine. Your tasks, calendar, and history live in a local SQLite database; an AI agent can read and act on them through a real API and a permissions model — the same way you can. It's what a task manager looks like when you design for a human *and* an agent working the same queue.
 
-![TaskPilot screenshot](docs/screenshot.png) <!-- add a real screenshot before publishing -->
+<!-- Add a screenshot at docs/screenshot.png and reference it here -->
 
 ## Why it exists
 
