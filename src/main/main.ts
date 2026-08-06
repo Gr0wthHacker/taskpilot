@@ -156,6 +156,16 @@ function createMainWindow(): BrowserWindow {
     if (mainWindow === win) mainWindow = null;
   });
 
+  // Initialize observer (v2 ambient intelligence)
+  void (async () => {
+    try {
+      const { initializeObserverIntegration } = await import('./observer-integration');
+      await initializeObserverIntegration(win);
+    } catch (err) {
+      console.error('Failed to initialize observer:', err);
+    }
+  })();
+
   return win;
 }
 
@@ -695,4 +705,13 @@ app.on('will-quit', () => {
   } catch {
     /* not created */
   }
+  // Shutdown observer
+  void (async () => {
+    try {
+      const { shutdownObserverIntegration } = await import('./observer-integration');
+      await shutdownObserverIntegration();
+    } catch (err) {
+      console.debug('Failed to shutdown observer:', err);
+    }
+  })();
 });

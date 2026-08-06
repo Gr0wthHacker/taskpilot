@@ -98,6 +98,7 @@ import { tasksRouter } from './routes/tasks';
 import { telemetryRouter } from './routes/telemetry';
 import { templatesRouter } from './routes/templates';
 import { webRouter } from './routes/web';
+import { setupObserverRoutes } from '@/main/observer/api';
 import { webhooksRouter } from './routes/webhooks';
 import { genericWebhooksRouter } from './routes/generic-webhooks';
 import { webhooksConfigsRouter } from './routes/webhooks-configs';
@@ -338,6 +339,8 @@ function buildApp(options: BuildAppOptions): Application {
   app.use('/api/settings', settingsRouter());
   app.use('/api/templates', templatesRouter());
   app.use('/api/onboarding', onboardingRouter());
+  // Observer system (v2 ambient intelligence).
+  setupObserverRoutes(app);
   // Data + system routes (Wave 7 power features). Body parsing for
   // `/api/data` uses the wider limit declared above.
   app.use('/api/data', dataRouter());
