@@ -5,8 +5,6 @@
  * Uses auto-approval heuristic to determine which tasks can run without review.
  */
 
-import { nanoid } from 'nanoid';
-
 import { createTask, updateTask } from '@/main/db/repositories/tasks';
 import {
   getSuggestion,
@@ -111,7 +109,6 @@ export function curateTaskFromSuggestion(
  * Infer auto-approval criteria from suggestion.
  */
 function inferCriteria(suggestion: any): AutoApproveCriteria {
-  const type = suggestion.type || '';
   const title = (suggestion.title || '').toLowerCase();
   const description = (suggestion.description || '').toLowerCase();
 
@@ -151,7 +148,7 @@ function inferCriteria(suggestion: any): AutoApproveCriteria {
 
   return {
     estimated_minutes: Math.max(1, Math.min(suggestion.estimated_minutes || 15, 60)),
-    confidence: Math.max(0, Math.min(suggestion.confidence || 0.7, 1)),
+    confidence: Math.max(0, Math.min((suggestion.confidence ?? 0.7), 1)),
     operation_type: operationType,
     risk_level: riskLevel,
   };

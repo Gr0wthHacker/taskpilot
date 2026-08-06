@@ -173,8 +173,6 @@ function generateNextStepSuggestions(context: any): SuggestionCandidate[] {
 function generateRelatedResearchSuggestions(context: any): SuggestionCandidate[] {
   const suggestions: SuggestionCandidate[] = [];
 
-  // From active research threads
-  const threads = context.research_threads || [];
   const recentEvents = listObservationEvents({
     source: 'search',
     limit: 10,

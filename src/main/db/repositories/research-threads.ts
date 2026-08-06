@@ -3,7 +3,7 @@
  * Tracks long-running investigations and learnings.
  */
 
-import { and, desc, eq, gt, lte } from 'drizzle-orm';
+import { and, desc, eq, gt } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 
 import { researchThreads, type ResearchThread, type CreateResearchThread } from '@/shared/schema-v2';

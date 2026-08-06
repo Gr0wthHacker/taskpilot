@@ -76,10 +76,12 @@ export function listObservationEvents(filter: ListObservationEventsFilter = {}):
   const limit = filter.limit ?? 1000;
   const offset = filter.offset ?? 0;
 
-  let query = db.select().from(observationEvents);
+  let query = db
+    .select()
+    .from(observationEvents) as any;
 
   if (conditions.length > 0) {
-    query = query.where(and(...conditions)) as typeof query;
+    query = query.where(and(...(conditions as any)));
   }
 
   return query

@@ -10,12 +10,10 @@
  */
 
 import {
-  getContextStateDecoded,
   updateContextState,
 } from '@/main/db/repositories/context-state';
 import {
   listObservationEvents,
-  countObservationEventsBySource,
 } from '@/main/db/repositories/observation-events';
 import {
   getActiveResearchThreads,
@@ -24,7 +22,6 @@ import {
   updateResearchThread,
   getResearchThreadDecoded,
 } from '@/main/db/repositories/research-threads';
-import type { ResearchThread } from '@/shared/schema-v2';
 
 interface InferenceState {
   running: boolean;
@@ -94,7 +91,7 @@ async function runInference(): Promise<void> {
   );
 
   // 4. Infer blockers
-  const blockers = inferBlockers(recentEvents, oneHourAgo);
+  const blockers = inferBlockers(recentEvents);
 
   // 5. Infer candidate next steps
   const candidates = inferCandidateThreads(recentEvents, currentProject);
@@ -190,7 +187,7 @@ async function linkEventsToThreads(events: any[]): Promise<void> {
  * Infer blockers from events.
  * Examples: PR waiting for review, test failing, file not saved.
  */
-function inferBlockers(events: any[], withinTimeframe: string): Array<{ type: string; description: string; duration_minutes: number }> {
+function inferBlockers(events: any[]): Array<{ type: string; description: string; duration_minutes: number }> {
   const blockers: Array<{ type: string; description: string; duration_minutes: number }> = [];
 
   // Detect GitHub activity: PRs waiting for review

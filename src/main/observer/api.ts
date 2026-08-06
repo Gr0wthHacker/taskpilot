@@ -19,7 +19,6 @@ import {
   getActiveSuggestions,
   actionSuggestion as actionDb,
   dismissSuggestion as dismissDb,
-  getSuggestionDecoded,
 } from '@/main/db/repositories/suggestions-repo';
 import { getObserverStatus } from './service';
 import { listObservationEvents } from '@/main/db/repositories/observation-events';
@@ -29,7 +28,7 @@ export function setupObserverRoutes(router: Router): void {
    * GET /api/observer/context
    * Returns current context state.
    */
-  router.get('/observer/context', (req, res) => {
+  router.get('/observer/context', (_req, res) => {
     try {
       const context = getContextStateDecoded();
       res.json(context);

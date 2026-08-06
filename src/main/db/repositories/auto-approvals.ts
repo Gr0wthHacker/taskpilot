@@ -3,7 +3,7 @@
  * Every auto-approved task is logged for traceability and reversibility.
  */
 
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { desc, eq, isNull } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 
 import { autoApprovals, type AutoApproval, type CreateAutoApproval } from '@/shared/schema-v2';

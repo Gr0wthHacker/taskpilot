@@ -36,7 +36,7 @@ export async function initializeObserver(options: ObserverBootstrapOptions = {})
 
   try {
     // 1. Start observation layer
-    const githubToken = options.githubToken || settingsRepository.get<string>('github_token');
+    const githubToken = options.githubToken || (settingsRepository.get<string>('github_token') ?? undefined);
     await startObserverService(githubToken);
 
     // 2. Start context engine (runs inference every 10s)
@@ -47,7 +47,11 @@ export async function initializeObserver(options: ObserverBootstrapOptions = {})
 
     // 4. Auto-curate suggestions every 15 minutes
     setInterval(() => {
-      autoApproveSuggestions().catch(console.debug);
+      try {
+        autoApproveSuggestions();
+      } catch (err) {
+        console.debug('Auto-curation failed:', err);
+      }
     }, 15 * 60 * 1000);
 
     bootstrapped = true;

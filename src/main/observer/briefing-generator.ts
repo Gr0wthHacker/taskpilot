@@ -9,7 +9,6 @@
 
 import {
   listTasks,
-  type Task,
 } from '@/main/db/repositories/tasks';
 import {
   getContextStateDecoded,

@@ -3,7 +3,7 @@
  * Shows at 8 AM with daily summary and focus.
  */
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { BriefingContent } from '@/main/observer/briefing-generator';
 
 interface MorningBriefingProps {
