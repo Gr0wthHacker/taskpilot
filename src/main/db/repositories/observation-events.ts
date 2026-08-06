@@ -55,14 +55,14 @@ export interface ListObservationEventsFilter {
 
 export function listObservationEvents(filter: ListObservationEventsFilter = {}): ObservationEvent[] {
   const db = getDb();
-  const conditions: unknown[] = [];
+  const conditions: any[] = [];
 
   if (filter.source) {
-    conditions.push(eq(observationEvents.source, filter.source));
+    conditions.push(eq(observationEvents.source, filter.source as any));
   }
 
   if (filter.type) {
-    conditions.push(eq(observationEvents.type, filter.type));
+    conditions.push(eq(observationEvents.type, filter.type as any));
   }
 
   if (filter.startTime) {

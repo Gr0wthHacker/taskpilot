@@ -84,7 +84,7 @@ async function generateSuggestions(): Promise<Suggestion[]> {
   const allCandidates: SuggestionCandidate[] = [
     ...generateNextStepSuggestions(context),
     ...generateRelatedResearchSuggestions(context),
-    ...generateRiskSuggestions(context),
+    ...generateRiskSuggestions(),
     ...generateConnectionSuggestions(context),
   ];
 
@@ -218,7 +218,7 @@ function generateRelatedResearchSuggestions(context: any): SuggestionCandidate[]
  * Generate "risk" suggestions.
  * Missing tests, documentation gaps, stuck reviews.
  */
-function generateRiskSuggestions(context: any): SuggestionCandidate[] {
+function generateRiskSuggestions(): SuggestionCandidate[] {
   const suggestions: SuggestionCandidate[] = [];
 
   const recentEvents = listObservationEvents({ limit: 50 });

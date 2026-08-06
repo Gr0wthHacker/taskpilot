@@ -10,6 +10,17 @@ import type { BriefingContent } from '@/main/observer/briefing-generator';
 const API_TOKEN = localStorage.getItem('api_token') || '';
 const API_BASE = '/api/observer';
 
+declare global {
+  interface Window {
+    electron?: {
+      ipcRenderer?: {
+        send: (channel: string, ...args: any[]) => void;
+        on: (channel: string, cb: (...args: any[]) => void) => () => void;
+      };
+    };
+  }
+}
+
 interface UseObserverOptions {
   autoRefresh?: boolean;
   refreshInterval?: number;
@@ -44,6 +55,7 @@ export function useObserverSuggestions(options: UseObserverOptions = {}) {
       const interval = setInterval(fetchSuggestions, refreshInterval);
       return () => clearInterval(interval);
     }
+    return undefined;
   }, [autoRefresh, refreshInterval, fetchSuggestions]);
 
   const dismissSuggestion = useCallback(async (id: string) => {
@@ -120,6 +132,7 @@ export function useObserverContext() {
 
 export function useObserverBriefing() {
   const [briefing, setBriefing] = useState<BriefingContent | null>(null);
+  const [showBriefing, setShowBriefing] = useState(false);
 
   const generateBriefing = useCallback(async () => {
     try {
@@ -144,10 +157,17 @@ export function useObserverBriefing() {
     if (window.electron?.ipcRenderer) {
       const unsubscribe = window.electron.ipcRenderer.on('observer:briefing', (briefing: BriefingContent) => {
         setBriefing(briefing);
+        setShowBriefing(true);
       });
       return () => unsubscribe?.();
     }
+    return undefined;
   }, []);
 
-  return { briefing, generate: generateBriefing, clear: () => setBriefing(null) };
+  return {
+    briefing,
+    showBriefing,
+    generate: generateBriefing,
+    dismiss: () => setShowBriefing(false),
+  };
 }

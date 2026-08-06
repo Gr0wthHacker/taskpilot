@@ -84,7 +84,7 @@ export function setupObserverRoutes(router: Router): void {
    * GET /api/observer/status
    * Returns observer service status.
    */
-  router.get('/observer/status', (req, res) => {
+  router.get('/observer/status', (_req, res) => {
     try {
       const status = getObserverStatus();
       res.json({ collectors: status });

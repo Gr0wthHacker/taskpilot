@@ -3,7 +3,9 @@
  * Uses Chrome DevTools Protocol to monitor page visits and search queries.
  */
 
+// @ts-ignore - chrome-remote-interface types not available
 import CDP from 'chrome-remote-interface';
+// @ts-ignore - devtools-protocol types not available
 import type { ProtocolMapping } from 'devtools-protocol';
 
 import type { ObserverCollector, ObservationEventPayload } from './base';
@@ -12,7 +14,8 @@ import { emitObservation } from './base';
 export class BrowserCollector implements ObserverCollector {
   name = 'Browser Activity';
   private running = false;
-  private client: CDP.Client | null = null;
+  // @ts-ignore - CDP.Client type not available
+  private client: any | null = null;
   private port = 9222; // Default Chrome DevTools Protocol port
   private lastUrls = new Set<string>(); // Dedup recent visits
 
@@ -21,7 +24,7 @@ export class BrowserCollector implements ObserverCollector {
 
     try {
       // Try to connect to Chrome DevTools Protocol
-      this.client = await CDP({ port: this.port, host: 'localhost' });
+      this.client = await (CDP as any)({ port: this.port, host: 'localhost' });
 
       const { Page, Runtime } = this.client;
 
@@ -69,7 +72,7 @@ export class BrowserCollector implements ObserverCollector {
     if (!this.client || !this.running) return;
 
     try {
-      const tabs = await CDP.List({ port: this.port });
+      const tabs = await (CDP as any).List({ port: this.port });
 
       for (const tab of tabs) {
         // Skip non-webpage tabs

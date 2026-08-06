@@ -5,7 +5,6 @@
  * TaskPilot's database for user approval before publishing to GitHub.
  */
 
-import * as settingsRepo from '@/main/db/repositories/settings';
 import { generateSynthesis, type SynthesisResult } from './index';
 import { getSqlite } from '@/main/db';
 

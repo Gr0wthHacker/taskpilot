@@ -66,7 +66,6 @@ export function stopContextEngine(): void {
 async function runInference(): Promise<void> {
   const now = new Date();
   const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString();
-  const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000).toISOString();
 
   // Get recent events
   const recentEvents = listObservationEvents({
@@ -94,7 +93,7 @@ async function runInference(): Promise<void> {
   const blockers = inferBlockers(recentEvents);
 
   // 5. Infer candidate next steps
-  const candidates = inferCandidateThreads(recentEvents, currentProject);
+  const candidates = inferCandidateThreads(recentEvents);
 
   // Update context state
   updateContextState({
@@ -215,8 +214,7 @@ function inferBlockers(events: any[]): Array<{ type: string; description: string
  * Examples: next file in sequence, follow-up from research, risk to address.
  */
 function inferCandidateThreads(
-  events: any[],
-  currentProject: any
+  events: any[]
 ): Array<{ type: string; description: string; priority: string; evidence: string[] }> {
   const candidates: Array<{ type: string; description: string; priority: string; evidence: string[] }> = [];
 

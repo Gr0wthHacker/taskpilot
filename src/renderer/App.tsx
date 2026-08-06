@@ -13,6 +13,10 @@ import {
 } from './components/KeyboardShortcutsProvider';
 import { CommandPalette } from './components/CommandPalette';
 import { ShortcutsHelp } from './components/ShortcutsHelp';
+import { SuggestionToast } from './components/Observer/SuggestionToast';
+import { MorningBriefing } from './components/Observer/MorningBriefing';
+import { SuggestionsSidebar } from './components/Observer/SuggestionsSidebar';
+import { useObserverSuggestions, useObserverBriefing } from './hooks/useObserver';
 
 /**
  * Inner shell — must live below `<QueryClientProvider>` so it can call
@@ -24,7 +28,38 @@ function AppShell(): JSX.Element {
   // when SSE is unavailable, so this is safe in non-Electron contexts too.
   useApiEventStream();
   useQuickCaptureBridge();
-  return <RouterProvider router={router} />;
+
+  // Observer system
+  const { suggestions, dismiss: dismissSuggestion, execute: executeSuggestion } = useObserverSuggestions();
+  const { briefing, showBriefing, dismiss: dismissBriefing } = useObserverBriefing();
+
+  return (
+    <div className="flex h-full w-full">
+      <div className="flex-1">
+        <RouterProvider router={router} />
+      </div>
+      <SuggestionsSidebar
+        onExecute={executeSuggestion}
+        onDismiss={dismissSuggestion}
+      />
+      {suggestions.length > 0 && (
+        <SuggestionToast
+          suggestion={suggestions[0]}
+          onDismiss={dismissSuggestion}
+          onExecute={executeSuggestion}
+        />
+      )}
+      {showBriefing && briefing && (
+        <MorningBriefing
+          briefing={briefing}
+          onDismiss={dismissBriefing}
+          onViewAll={() => {
+            window.location.pathname = '/observer/suggestions';
+          }}
+        />
+      )}
+    </div>
+  );
 }
 
 /**

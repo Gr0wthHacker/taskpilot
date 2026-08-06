@@ -6,6 +6,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+// @ts-ignore - chokidar types not available
 import chokidar from 'chokidar';
 
 import type { ObserverCollector, ObservationEventPayload } from './base';
@@ -13,7 +14,8 @@ import { emitObservation } from './base';
 
 export class NotesCollector implements ObserverCollector {
   name = 'Notes & Docs';
-  private watcher: chokidar.FSWatcher | null = null;
+  // @ts-ignore - chokidar.FSWatcher type not available
+  private watcher: any | null = null;
   private running = false;
   private watchPaths: string[] = [];
 
@@ -55,11 +57,11 @@ export class NotesCollector implements ObserverCollector {
       ignoreInitial: true,
     });
 
-    this.watcher.on('change', (filePath) => {
+    this.watcher.on('change', (filePath: string) => {
       this.onNoteChange(filePath);
     });
 
-    this.watcher.on('add', (filePath) => {
+    this.watcher.on('add', (filePath: string) => {
       this.onNoteAdd(filePath);
     });
 

@@ -61,7 +61,7 @@ export function curateTaskFromSuggestion(
     priority: suggestion.urgency === 'high' ? 'p0' : suggestion.urgency === 'medium' ? 'p1' : 'p2',
     agent_executable: true,
     agent_method: criteria.operation_type === 'api_call' ? 'either' : 'cli',
-    agent_instructions: `From suggestion: ${suggestion.description}\n\nEstimated time: ${suggestion.estimated_minutes} min\nConfidence: ${Math.round(suggestion.confidence * 100)}%`,
+    agent_instructions: `From suggestion: ${suggestion.description}\n\nEstimated time: ${suggestion.estimated_minutes} min\nConfidence: ${Math.round((suggestion.confidence ?? 0.7) * 100)}%`,
     tags: ['auto-derived', `via-suggestion:${suggestion.type}`],
   });
 

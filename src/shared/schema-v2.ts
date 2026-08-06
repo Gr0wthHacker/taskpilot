@@ -5,13 +5,12 @@
  * All timestaps are ISO 8601. All JSON is TEXT columns (callers deserialize).
  */
 
-import { relations, sql } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import {
   integer,
   real,
   sqliteTable,
   text,
-  type AnySQLiteColumn,
 } from 'drizzle-orm/sqlite-core';
 
 /* -------------------------------------------------------------------------- */

@@ -69,21 +69,22 @@ export class GitHubCollector implements ObserverCollector {
     if (!this.octokit || !this.username) return;
 
     try {
-      // Get recent events for this user
-      const { data: events } = await this.octokit.activity.listEventsForAuthenticatedUser({
+      // Get recent events for authenticated user
+      const { data: events } = await (this.octokit.activity as any).listEventsForAuthenticatedUser({
         per_page: 50,
       });
 
       for (const event of events) {
         // Skip if we've seen this event before (use creation time as simple dedup)
-        if (event.created_at <= this.lastEventId) continue;
+        const eventTime = (event as any).created_at;
+        if (!eventTime || eventTime <= this.lastEventId) continue;
 
         const payload = this.eventToObservation(event);
         if (payload) {
           emitObservation(payload);
         }
 
-        this.lastEventId = event.created_at;
+        this.lastEventId = eventTime || new Date().toISOString();
       }
     } catch (err) {
       console.debug('GitHubCollector: poll error', err);
