@@ -31,6 +31,14 @@ import type {
   TaskPriority,
   TaskStatus,
 } from './types.js';
+import {
+  observationEvents,
+  contextState,
+  researchThreads,
+  suggestions,
+  autoApprovals,
+  briefingHistories,
+} from './schema-v2.js';
 
 /* -------------------------------------------------------------------------- */
 /*  tasks                                                                     */
@@ -556,6 +564,12 @@ export const schema = {
   deliberations,
   conversations,
   conversationTaskLinks,
+  observationEvents,
+  contextState,
+  researchThreads,
+  suggestions,
+  autoApprovals,
+  briefingHistories,
   tasksRelations,
   executionLogsRelations,
   calendarSyncRelations,
