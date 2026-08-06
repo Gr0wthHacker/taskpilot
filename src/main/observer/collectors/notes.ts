@@ -65,6 +65,10 @@ export class NotesCollector implements ObserverCollector {
       this.onNoteAdd(filePath);
     });
 
+    this.watcher.on('error', (err: any) => {
+      console.debug('NotesCollector: watcher error', err.message);
+    });
+
     this.running = true;
   }
 

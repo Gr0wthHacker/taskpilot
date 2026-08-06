@@ -67,6 +67,10 @@ export class CodeCollector implements ObserverCollector {
       this.onFileAdd(filePath);
     });
 
+    this.watcher.on('error', (err: any) => {
+      console.debug('CodeCollector: watcher error', err.message);
+    });
+
     this.running = true;
   }
 
