@@ -7,8 +7,20 @@ import { useEffect, useState, useCallback } from 'react';
 import type { Suggestion } from '@/shared/schema-v2';
 import type { BriefingContent } from '@/main/observer/briefing-generator';
 
-const API_TOKEN = localStorage.getItem('api_token') || '';
+let API_TOKEN = '';
 const API_BASE = '/api/observer';
+
+// Load API token from main process on startup
+if (typeof window !== 'undefined' && (window as any).taskpilot?.getApiToken) {
+  (window as any).taskpilot.getApiToken().then((token: string | { error: any }) => {
+    if (typeof token === 'string') {
+      API_TOKEN = token;
+    }
+  }).catch(() => {
+    // Token unavailable, use empty string
+    API_TOKEN = '';
+  });
+}
 
 declare global {
   interface Window {

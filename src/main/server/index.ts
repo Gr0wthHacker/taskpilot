@@ -340,7 +340,9 @@ function buildApp(options: BuildAppOptions): Application {
   app.use('/api/templates', templatesRouter());
   app.use('/api/onboarding', onboardingRouter());
   // Observer system (v2 ambient intelligence).
-  setupObserverRoutes(app);
+  const observerRouter = express.Router();
+  setupObserverRoutes(observerRouter);
+  app.use('/api', observerRouter);
   // Data + system routes (Wave 7 power features). Body parsing for
   // `/api/data` uses the wider limit declared above.
   app.use('/api/data', dataRouter());
