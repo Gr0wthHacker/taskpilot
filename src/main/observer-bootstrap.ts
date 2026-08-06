@@ -35,15 +35,22 @@ export async function initializeObserver(options: ObserverBootstrapOptions = {})
   console.log('Initializing observer system...');
 
   try {
-    // 1. Start observation layer
-    const githubToken = options.githubToken || (settingsRepository.get<string>('github_token') ?? undefined);
-    await startObserverService(githubToken);
+    try {
+      // 1. Start observation layer
+      const githubToken = options.githubToken || (settingsRepository.get<string>('github_token') ?? undefined);
+      await startObserverService(githubToken);
 
-    // 2. Start context engine (runs inference every 10s)
-    startContextEngine();
+      // 2. Start context engine (runs inference every 10s)
+      startContextEngine();
 
-    // 3. Start suggestion engine (runs every 5 min)
-    startSuggestionEngine();
+      // 3. Start suggestion engine (runs every 5 min)
+      startSuggestionEngine();
+    } catch (err) {
+      console.error('Observer initialization error (tables may not exist yet):', err);
+      // Continue with app startup even if observer tables don't exist yet
+      // They'll be created on next migration run or next app restart
+      return;
+    }
 
     // 4. Auto-curate suggestions every 15 minutes
     setInterval(() => {
