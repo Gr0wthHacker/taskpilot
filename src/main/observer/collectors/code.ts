@@ -25,16 +25,43 @@ export class CodeCollector implements ObserverCollector {
     'build',
     '.next',
     'coverage',
+    '.venv',
+    '__pycache__',
+    '.pytest_cache',
+    '.mypy_cache',
+    'target',
+    '.gradle',
+    '.m2',
+    '.cargo',
+    'venv',
+    'env',
     '**/.env*',
+    '**/*.log',
+    '**/tsup.cache*',
+    '**/.turbo',
   ];
 
   constructor() {
-    // Watch common project directories
-    // Expand this based on user's project layout
-    const userHome = process.env.HOME || process.env.USERPROFILE || '';
+    // Only watch source directories, not the entire home directory
+    // This prevents watching build artifacts and temp files
+    const cwd = process.cwd();
     this.watchPaths = [
-      userHome, // Home directory (catches ~/projects/*, ~/work/*, etc.)
-    ].filter((p) => fs.existsSync(p));
+      path.join(cwd, 'src'),      // Source code
+      path.join(cwd, 'packages'),  // Monorepo packages if any
+      path.join(cwd, '*.config.*'), // Config files
+      path.join(cwd, 'package.json'),
+    ].filter((p) => {
+      try {
+        return fs.existsSync(p);
+      } catch {
+        return false;
+      }
+    });
+
+    // If no paths, fall back to current working directory only
+    if (this.watchPaths.length === 0) {
+      this.watchPaths = [cwd];
+    }
   }
 
   async start(): Promise<void> {
