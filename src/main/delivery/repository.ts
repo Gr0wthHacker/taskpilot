@@ -14,6 +14,7 @@ import { getSqlite } from '@/main/db';
 import {
   compareQueueItems,
   isClosedStatus,
+  nextSlaPauses,
   withSla,
   type DeliveryItem,
   type DeliveryItemWithSla,
@@ -23,6 +24,7 @@ import {
   type DeliveryTemplateStep,
   type DeliveryTemplateWithSteps,
   type InstantiateTemplateInput,
+  type SlaPause,
   type SlaState,
 } from '@/shared/delivery';
 
@@ -76,6 +78,7 @@ interface ItemRow {
   sla_hours: number | null;
   sla_started_at: string;
   sla_due_at: string | null;
+  sla_pauses: string | null;
   completed_at: string | null;
   template_id: string | null;
   template_step_id: string | null;
@@ -87,9 +90,23 @@ interface ItemRow {
   updated_at: string;
 }
 
+function parsePauses(raw: string | null | undefined): SlaPause[] {
+  if (!raw) return [];
+  try {
+    const v = JSON.parse(raw) as unknown;
+    if (!Array.isArray(v)) return [];
+    return v
+      .filter((p): p is { started_at: string; ended_at?: unknown } => typeof p?.started_at === 'string')
+      .map((p) => ({ started_at: p.started_at, ended_at: typeof p.ended_at === 'string' ? p.ended_at : null }));
+  } catch {
+    return [];
+  }
+}
+
 export function rowToItem(r: ItemRow): DeliveryItem {
   return {
     ...r,
+    sla_pauses: parsePauses(r.sla_pauses),
     owner_type: r.owner_type as DeliveryOwnerType,
     status: r.status as DeliveryStatus,
     sla_hours: r.sla_hours === null ? null : Number(r.sla_hours),
@@ -187,10 +204,10 @@ export function createDeliveryItem(input: CreateDeliveryItemInput, now: number =
     .prepare(
       `INSERT INTO delivery_items (
         id, title, description, owner_type, owner_name, client, venture, status,
-        deadline, sla_hours, sla_started_at, sla_due_at, completed_at,
+        deadline, sla_hours, sla_started_at, sla_due_at, sla_pauses, completed_at,
         template_id, template_step_id, instance_id, position, client_visible, deliverable_url,
         created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       id,
@@ -205,6 +222,7 @@ export function createDeliveryItem(input: CreateDeliveryItemInput, now: number =
       slaHours,
       started,
       dueFrom(started, slaHours),
+      JSON.stringify(nextSlaPauses([], status, ts)),
       isClosedStatus(status) ? ts : null,
       input.template_id ?? null,
       input.template_step_id ?? null,
@@ -273,6 +291,8 @@ export function updateDeliveryItem(
     const nowClosed = isClosedStatus(patch.status);
     if (nowClosed && !wasClosed) next.completed_at = nowIso(now);
     if (!nowClosed) next.completed_at = null;
+    // Waiting on the client pauses the SLA clock; any other status resumes it.
+    next.sla_pauses = nextSlaPauses(current.sla_pauses, patch.status, nowIso(now));
   }
   next.updated_at = nowIso(now);
 
@@ -280,7 +300,7 @@ export function updateDeliveryItem(
     .prepare(
       `UPDATE delivery_items SET
         title = ?, description = ?, owner_type = ?, owner_name = ?, client = ?, venture = ?,
-        status = ?, deadline = ?, sla_hours = ?, sla_started_at = ?, sla_due_at = ?,
+        status = ?, deadline = ?, sla_hours = ?, sla_started_at = ?, sla_due_at = ?, sla_pauses = ?,
         completed_at = ?, client_visible = ?, deliverable_url = ?, updated_at = ?
       WHERE id = ?`,
     )
@@ -296,6 +316,7 @@ export function updateDeliveryItem(
       next.sla_hours,
       next.sla_started_at,
       next.sla_due_at,
+      JSON.stringify(next.sla_pauses),
       next.completed_at,
       next.client_visible ? 1 : 0,
       next.deliverable_url,
@@ -332,7 +353,7 @@ export interface DeliveryQueueSummary {
 function emptySummary(): DeliveryQueueSummary {
   return {
     total: 0,
-    by_sla: { none: 0, on_track: 0, at_risk: 0, breached: 0, met: 0, missed: 0 },
+    by_sla: { none: 0, on_track: 0, at_risk: 0, breached: 0, paused: 0, met: 0, missed: 0 },
     by_owner: { jack: 0, contractor: 0, offshore: 0 },
   };
 }
