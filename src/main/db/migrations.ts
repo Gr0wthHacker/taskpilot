@@ -852,6 +852,103 @@ CREATE INDEX IF NOT EXISTS idx_delivery_items_instance
 `;
 
 /**
+ * Schema v12: renewal engine (T704) and client portal (T707).
+ *
+ *  - `renewals`: dated, recurring client obligations with lead times.
+ *  - `renewal_reminders`: one row per (renewal, cycle due date, lead time),
+ *    so the engine never fires the same reminder twice.
+ *  - `portal_entries`: findings, deliverable links, next steps and monthly
+ *    notes Jack writes per client. Hidden from the portal until published.
+ *  - `portal_links`: signed share links per client, with expiry and revoke.
+ *  - `delivery_items.client_visible` / `deliverable_url`: per-item publish
+ *    flag and an optional link shown on the portal.
+ *
+ * CREATE statements are idempotent; the two ALTERs are guarded by
+ * `addColumnIfMissing` because SQLite has no ADD COLUMN IF NOT EXISTS.
+ */
+const V12_SQL = `
+CREATE TABLE IF NOT EXISTS renewals (
+  id TEXT PRIMARY KEY,
+  client TEXT NOT NULL,
+  item_type TEXT NOT NULL CHECK (item_type IN
+    ('state_license','caqh_attestation','dea','risk_assessment','baa','site_rescan','custom')),
+  label TEXT NOT NULL,
+  due_date TEXT NOT NULL,
+  recurrence TEXT NOT NULL DEFAULT 'none',
+  lead_times TEXT NOT NULL DEFAULT '[90,60,30]',
+  owner_type TEXT NOT NULL DEFAULT 'jack' CHECK (owner_type IN ('jack','contractor','offshore')),
+  owner_name TEXT,
+  venture TEXT,
+  notes TEXT,
+  client_visible INTEGER NOT NULL DEFAULT 0,
+  active INTEGER NOT NULL DEFAULT 1,
+  last_renewed_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_renewals_client ON renewals(client);
+CREATE INDEX IF NOT EXISTS idx_renewals_active_due ON renewals(active, due_date);
+
+CREATE TABLE IF NOT EXISTS renewal_reminders (
+  id TEXT PRIMARY KEY,
+  renewal_id TEXT NOT NULL REFERENCES renewals(id) ON DELETE CASCADE,
+  cycle_due_date TEXT NOT NULL,
+  lead_days INTEGER NOT NULL,
+  trigger_date TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('sent','skipped')),
+  delivery_item_id TEXT REFERENCES delivery_items(id) ON DELETE SET NULL,
+  acknowledged_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (renewal_id, cycle_due_date, lead_days)
+);
+
+CREATE INDEX IF NOT EXISTS idx_renewal_reminders_open
+  ON renewal_reminders(status, acknowledged_at);
+
+CREATE TABLE IF NOT EXISTS portal_entries (
+  id TEXT PRIMARY KEY,
+  client TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('finding','deliverable','next_step','monthly_note')),
+  title TEXT NOT NULL,
+  body TEXT,
+  url TEXT,
+  month TEXT,
+  client_visible INTEGER NOT NULL DEFAULT 0,
+  done INTEGER NOT NULL DEFAULT 0,
+  position INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_portal_entries_client ON portal_entries(client, kind, month);
+
+CREATE TABLE IF NOT EXISTS portal_links (
+  id TEXT PRIMARY KEY,
+  client TEXT NOT NULL,
+  label TEXT,
+  expires_at TEXT NOT NULL,
+  revoked_at TEXT,
+  last_viewed_at TEXT,
+  view_count INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_portal_links_client ON portal_links(client);
+`;
+
+function addColumnIfMissing(db: Database.Database, table: string, column: string, ddl: string): void {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  if (!cols.some((c) => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+}
+
+function applyV12(db: Database.Database): void {
+  db.exec(V12_SQL);
+  addColumnIfMissing(db, 'delivery_items', 'client_visible', 'INTEGER NOT NULL DEFAULT 0');
+  addColumnIfMissing(db, 'delivery_items', 'deliverable_url', 'TEXT');
+}
+
+/**
  * Returns true when `sqlite_master` already contains the baseline `tasks`
  * table. Used to short-circuit the inline runner so drizzle owns the schema
  * lifecycle once it's been run at least once.
@@ -994,6 +1091,11 @@ export function runInlineMigrations(db: Database.Database): boolean {
       db.exec(V11_SQL);
       applied.push('delivery queue + templates');
     }
+    // v12: renewals + renewal_reminders + portal_entries + portal_links.
+    if (currentVersion < 12) {
+      applyV12(db);
+      applied.push('renewals + client portal');
+    }
     if (applied.length > 0) {
       setVersion(
         db,
@@ -1012,6 +1114,7 @@ export function runInlineMigrations(db: Database.Database): boolean {
 
   db.exec(SCHEMA_SQL);
   db.exec(V11_SQL);
+  applyV12(db);
   setVersion(db, CURRENT_SCHEMA_VERSION, 'inline baseline');
   return true;
 }

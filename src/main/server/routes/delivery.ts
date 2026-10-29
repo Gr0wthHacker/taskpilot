@@ -41,6 +41,7 @@ import {
   UNASSIGNED_OWNER,
   withSla,
 } from '@/shared/delivery';
+import { isSafeHttpUrl } from '@/shared/portal';
 
 import { ApiHttpError } from '../errors';
 import { asyncHandler, validateBody } from '../middleware';
@@ -71,6 +72,13 @@ const createItemSchema = z.object({
   deadline: isoSchema.nullable().optional(),
   sla_hours: slaHoursSchema.nullable().optional(),
   sla_started_at: isoSchema.optional(),
+  client_visible: z.boolean().optional(),
+  deliverable_url: z
+    .string()
+    .max(2_000)
+    .refine((v) => isSafeHttpUrl(v), 'must be an http(s) URL')
+    .nullable()
+    .optional(),
 });
 
 const updateItemSchema = createItemSchema.partial().extend({

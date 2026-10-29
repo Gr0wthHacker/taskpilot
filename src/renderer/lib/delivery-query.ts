@@ -57,6 +57,8 @@ export interface DeliveryItemPatch {
   status?: DeliveryStatus;
   deadline?: string | null;
   sla_hours?: number | null;
+  client_visible?: boolean;
+  deliverable_url?: string | null;
 }
 
 export interface CreateDeliveryItemBody extends DeliveryItemPatch {
