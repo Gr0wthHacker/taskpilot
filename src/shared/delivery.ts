@@ -172,7 +172,7 @@ export function formatDuration(ms: number): string {
   const mins = minutes % 60;
   if (days > 0) return hours > 0 ? `${days}d ${hours}h` : `${days}d`;
   if (hours > 0) return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
-  return `${mins}m`;
+  return mins > 0 ? `${mins}m` : '<1m';
 }
 
 /** Human label for the SLA timer column. */
