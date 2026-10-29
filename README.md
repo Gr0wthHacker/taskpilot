@@ -4,7 +4,16 @@
 
 TaskPilot runs entirely on your machine. Your tasks, calendar, and history live in a local SQLite database; an AI agent can read and act on them through a real API and a permissions model — the same way you can. It's what a task manager looks like when you design for a human *and* an agent working the same queue.
 
-<!-- Add a screenshot at docs/screenshot.png and reference it here -->
+![Inbox](docs/screenshots/inbox.png)
+
+## Screenshots
+
+All data in these screenshots is placeholder fixture data. Regenerate them with `python scripts/screenshots/capture.py`.
+
+| | |
+|---|---|
+| ![Board grouped by status](docs/screenshots/board.png) **Board**: tasks grouped by pipeline stage. | ![Delivery queue](docs/screenshots/delivery-queue.png) **Delivery queue**: client work with owner, status and SLA timer. |
+| ![Delivery template](docs/screenshots/delivery-template.png) **Delivery template**: the steps behind a service line, each with an owner role and SLA. | ![Settings](docs/screenshots/settings.png) **Settings**: theme, defaults, quick capture and integration tabs. |
 
 ## Why it exists
 
