@@ -99,6 +99,10 @@ export interface DeliveryItem {
   /** Groups the items produced by one template instantiation. */
   instance_id: string | null;
   position: number;
+  /** Shown on the client portal (T707) when true. Default false. */
+  client_visible: boolean;
+  /** Optional link to the finished deliverable, shown on the portal. */
+  deliverable_url: string | null;
   created_at: string;
   updated_at: string;
 }

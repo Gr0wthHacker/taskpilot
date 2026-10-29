@@ -81,19 +81,25 @@ interface ItemRow {
   template_step_id: string | null;
   instance_id: string | null;
   position: number;
+  client_visible: number | null;
+  deliverable_url: string | null;
   created_at: string;
   updated_at: string;
 }
 
-function rowToItem(r: ItemRow): DeliveryItem {
+export function rowToItem(r: ItemRow): DeliveryItem {
   return {
     ...r,
     owner_type: r.owner_type as DeliveryOwnerType,
     status: r.status as DeliveryStatus,
     sla_hours: r.sla_hours === null ? null : Number(r.sla_hours),
     position: Number(r.position),
+    client_visible: Number(r.client_visible ?? 0) === 1,
+    deliverable_url: r.deliverable_url ?? null,
   };
 }
+
+export type { ItemRow as DeliveryItemRow };
 
 interface TemplateRow {
   id: string;
@@ -153,6 +159,8 @@ export interface CreateDeliveryItemInput {
   template_step_id?: string | null;
   instance_id?: string | null;
   position?: number;
+  client_visible?: boolean;
+  deliverable_url?: string | null;
 }
 
 export function getDeliveryItem(id: string): DeliveryItem | null {
@@ -180,8 +188,9 @@ export function createDeliveryItem(input: CreateDeliveryItemInput, now: number =
       `INSERT INTO delivery_items (
         id, title, description, owner_type, owner_name, client, venture, status,
         deadline, sla_hours, sla_started_at, sla_due_at, completed_at,
-        template_id, template_step_id, instance_id, position, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        template_id, template_step_id, instance_id, position, client_visible, deliverable_url,
+        created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       id,
@@ -201,6 +210,8 @@ export function createDeliveryItem(input: CreateDeliveryItemInput, now: number =
       input.template_step_id ?? null,
       input.instance_id ?? null,
       input.position ?? 0,
+      input.client_visible ? 1 : 0,
+      input.deliverable_url?.trim() || null,
       ts,
       ts,
     );
@@ -218,6 +229,8 @@ export interface UpdateDeliveryItemInput {
   deadline?: string | null;
   sla_hours?: number | null;
   sla_started_at?: string;
+  client_visible?: boolean;
+  deliverable_url?: string | null;
 }
 
 export function updateDeliveryItem(
@@ -250,6 +263,8 @@ export function updateDeliveryItem(
     next.sla_started_at = toIso(patch.sla_started_at, 'sla_started_at');
   }
   if (patch.sla_hours !== undefined) next.sla_hours = patch.sla_hours;
+  if (patch.client_visible !== undefined) next.client_visible = patch.client_visible;
+  if (patch.deliverable_url !== undefined) next.deliverable_url = patch.deliverable_url?.trim() || null;
   next.sla_due_at = dueFrom(next.sla_started_at, next.sla_hours);
 
   if (patch.status !== undefined && patch.status !== current.status) {
@@ -266,7 +281,7 @@ export function updateDeliveryItem(
       `UPDATE delivery_items SET
         title = ?, description = ?, owner_type = ?, owner_name = ?, client = ?, venture = ?,
         status = ?, deadline = ?, sla_hours = ?, sla_started_at = ?, sla_due_at = ?,
-        completed_at = ?, updated_at = ?
+        completed_at = ?, client_visible = ?, deliverable_url = ?, updated_at = ?
       WHERE id = ?`,
     )
     .run(
@@ -282,6 +297,8 @@ export function updateDeliveryItem(
       next.sla_started_at,
       next.sla_due_at,
       next.completed_at,
+      next.client_visible ? 1 : 0,
+      next.deliverable_url,
       next.updated_at,
       id,
     );

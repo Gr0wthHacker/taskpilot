@@ -18,7 +18,7 @@ import type Database from 'better-sqlite3';
  * drizzle migration or a baseline-altering inline migration so `db:status` can
  * compare runtime vs. expected.
  */
-export const CURRENT_SCHEMA_VERSION = 11;
+export const CURRENT_SCHEMA_VERSION = 12;
 
 const ENSURE_TABLE_SQL = `
 CREATE TABLE IF NOT EXISTS _schema_version (

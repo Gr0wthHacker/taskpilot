@@ -62,6 +62,8 @@ import { costRouter } from './routes/cost';
 import { dataRouter, systemRouter } from './routes/data';
 import { decisionsRouter, decisionsRootRouter } from './routes/decisions';
 import { deliveryRouter } from './routes/delivery';
+import { portalAdminRouter, portalPublicRouter } from './routes/portal';
+import { renewalsRouter } from './routes/renewals';
 import { desktopRouter } from './routes/desktop';
 import { feedbackRouter } from './routes/feedback';
 import { githubRouter } from './routes/github';
@@ -115,6 +117,11 @@ import { setWatcherState } from './watcher-state';
 /*  Logging                                                                   */
 /* -------------------------------------------------------------------------- */
 
+/** Portal share tokens are bearer secrets; keep them out of request logs. */
+export function redactPortalToken(url: string): string {
+  return url.replace(/^\/portal\/[^/?#]+/, '/portal/[REDACTED]');
+}
+
 function requestLogger(): (
   req: Request,
   res: Response,
@@ -126,7 +133,7 @@ function requestLogger(): (
       const durMs = Number(process.hrtime.bigint() - startNs) / 1_000_000;
       // eslint-disable-next-line no-console
       console.log(
-        `[taskpilot:api] ${req.method} ${req.originalUrl} ${res.statusCode} ${durMs.toFixed(1)}ms`,
+        `[taskpilot:api] ${req.method} ${redactPortalToken(req.originalUrl)} ${res.statusCode} ${durMs.toFixed(1)}ms`,
       );
     });
     next();
@@ -404,6 +411,12 @@ function buildApp(options: BuildAppOptions): Application {
   app.use('/api/businesses', businessesRouter());
   // Client delivery queue + templates (T693/T694).
   app.use('/api/delivery', deliveryRouter());
+  // Renewal engine (T704) and client portal admin (T707).
+  app.use('/api/renewals', renewalsRouter());
+  app.use('/api/portal', portalAdminRouter());
+  // Public, token-gated client portal pages (T707). Allowlisted in the auth
+  // middleware; the signed path token is the credential.
+  app.use('/portal', portalPublicRouter());
   // Publishing pipeline (long-form → DEAI → atomized → scheduled → published).
   app.use('/api/content', contentRouter());
   // Morning brief — auto-generated daily CEO update.
@@ -456,6 +469,7 @@ interface SubsystemHandles {
   stopAutoSummary?: () => void;
   stopStatusReportScheduler?: () => void;
   stopSchedules?: () => void;
+  stopRenewals?: () => void;
   stopKnowledge?: () => Promise<void>;
   stopTaskStats?: () => void;
   stopMemoryStats?: () => void;
@@ -990,6 +1004,40 @@ async function bootSubsystems(): Promise<SubsystemHandles> {
     }
   }
 
+  // Renewal engine (T704) ---------------------------------------------------
+  // Hourly pass that records lead-time reminders and creates Delivery queue
+  // items for renewals coming due. Idempotent per (renewal, cycle, lead), so
+  // the hourly cadence never duplicates work. Tests opt out via
+  // TASKPILOT_DISABLE_RENEWALS=1.
+  if (process.env.TASKPILOT_DISABLE_RENEWALS !== '1') {
+    try {
+      const { startRenewalEngine } = await import('@/main/renewals/engine');
+      handles.stopRenewals = startRenewalEngine((result) => {
+        if (result.reminders.length === 0) return;
+        void (async () => {
+          try {
+            const mod = (await import('@/main/notifications')) as {
+              notify?: (opts: { title: string; body: string }) => void;
+            };
+            const n = result.reminders.length;
+            mod.notify?.({
+              title: n === 1 ? 'Renewal coming due' : `${n} renewals coming due`,
+              body: 'Open Renewals in TaskPilot to review.',
+            });
+          } catch {
+            /* non-fatal: reminders are still recorded */
+          }
+        })();
+      });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.log(
+        '[taskpilot:api] renewal engine boot failed:',
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+  }
+
   // Morning brief + boot tasks — once per day, on first launch.
   // Both are best-effort: a failure here MUST NOT block API boot. Tests
   // opt out via TASKPILOT_DISABLE_BOOT_TASKS=1 so the integration suite
@@ -1225,6 +1273,13 @@ export async function startApiServer(
     if (subsystems.stopSchedules) {
       try {
         subsystems.stopSchedules();
+      } catch {
+        /* non-fatal */
+      }
+    }
+    if (subsystems.stopRenewals) {
+      try {
+        subsystems.stopRenewals();
       } catch {
         /* non-fatal */
       }

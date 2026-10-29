@@ -221,7 +221,7 @@ describe('v11 migration', () => {
       db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'delivery_%'").all() as Array<{ name: string }>
     ).map((r) => r.name);
     expect(names.sort()).toEqual(['delivery_items', 'delivery_template_steps', 'delivery_templates']);
-    expect(getCurrentVersion(db)).toBe(11);
+    expect(getCurrentVersion(db)).toBeGreaterThanOrEqual(11);
     db.close();
   });
 });

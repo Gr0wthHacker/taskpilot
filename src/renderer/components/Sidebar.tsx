@@ -10,6 +10,8 @@ import {
   CalendarDays,
   ChevronDown,
   ClipboardList,
+  RefreshCw,
+  Globe,
   Eye,
   Folder,
   Gauge,
@@ -86,6 +88,8 @@ const PLAN: NavItem[] = [
   { to: '/goals', label: 'Goals', icon: Target, alsoActiveOn: ['/goals/'] },
   { to: '/businesses', label: 'Businesses', icon: Briefcase },
   { to: '/delivery', label: 'Delivery', icon: ClipboardList },
+  { to: '/renewals', label: 'Renewals', icon: RefreshCw },
+  { to: '/client-portal', label: 'Client portal', icon: Globe },
   { to: '/content', label: 'Content', icon: Send },
   { to: '/schedules', label: 'Schedules', icon: CalendarClock },
 ];
