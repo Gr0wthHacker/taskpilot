@@ -193,6 +193,12 @@ export function idempotency(): RequestHandler {
       resolveFn = resolve;
       rejectFn = reject;
     });
+    // The promise is rejected on every non-2xx or closed response, but it only
+    // has a handler when a concurrent duplicate is waiting on it. With no
+    // waiter the rejection is unhandled, and Node's default
+    // (--unhandled-rejections=throw) takes the whole server process down.
+    // Waiters still see the rejection through their own .then() handlers.
+    promise.catch(() => undefined);
     const entry: InFlightEntry = {
       promise,
       waiters: 0,
