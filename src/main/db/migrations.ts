@@ -949,6 +949,19 @@ function applyV12(db: Database.Database): void {
 }
 
 /**
+ * Schema v13: SLA pauses (D39). `delivery_items.sla_pauses` holds a JSON
+ * array of `{ started_at, ended_at }` intervals the item spent waiting on the
+ * client; the shared SLA math leaves them out of elapsed time. Items already
+ * waiting on the client when this runs start a pause at their last update.
+ */
+function applyV13(db: Database.Database): void {
+  addColumnIfMissing(db, 'delivery_items', 'sla_pauses', "TEXT NOT NULL DEFAULT '[]'");
+  db.exec(`UPDATE delivery_items
+    SET sla_pauses = json_array(json_object('started_at', updated_at, 'ended_at', NULL))
+    WHERE status = 'waiting_on_client' AND sla_pauses = '[]'`);
+}
+
+/**
  * Returns true when `sqlite_master` already contains the baseline `tasks`
  * table. Used to short-circuit the inline runner so drizzle owns the schema
  * lifecycle once it's been run at least once.
@@ -1096,6 +1109,11 @@ export function runInlineMigrations(db: Database.Database): boolean {
       applyV12(db);
       applied.push('renewals + client portal');
     }
+    // v13: delivery_items.sla_pauses.
+    if (currentVersion < 13) {
+      applyV13(db);
+      applied.push('delivery SLA pauses');
+    }
     if (applied.length > 0) {
       setVersion(
         db,
@@ -1115,6 +1133,7 @@ export function runInlineMigrations(db: Database.Database): boolean {
   db.exec(SCHEMA_SQL);
   db.exec(V11_SQL);
   applyV12(db);
+  applyV13(db);
   setVersion(db, CURRENT_SCHEMA_VERSION, 'inline baseline');
   return true;
 }

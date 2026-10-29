@@ -54,6 +54,7 @@ const SLA_FILTERS: Array<{ value: SlaState | 'all'; label: string }> = [
   { value: 'breached', label: 'Breached' },
   { value: 'at_risk', label: 'At risk' },
   { value: 'on_track', label: 'On track' },
+  { value: 'paused', label: 'Paused' },
   { value: 'none', label: 'No SLA' },
 ];
 
@@ -61,6 +62,7 @@ const SLA_BADGE: Record<SlaState, string> = {
   breached: 'bg-red-500/15 text-red-600 dark:text-red-400',
   at_risk: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
   on_track: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400',
+  paused: 'bg-sky-500/15 text-sky-700 dark:text-sky-400',
   none: 'bg-muted text-muted-foreground',
   met: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
   missed: 'bg-red-500/10 text-red-600 dark:text-red-400',

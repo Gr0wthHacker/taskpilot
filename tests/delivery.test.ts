@@ -25,7 +25,7 @@ import {
   updateDeliveryTemplateStep,
 } from '@/main/delivery/repository';
 import { BUILTIN_TEMPLATES } from '@/main/delivery/builtin-templates';
-import { computeSla, formatSlaTimer } from '@/shared/delivery';
+import { computeSla, formatSlaTimer, nextSlaPauses, pausedMs } from '@/shared/delivery';
 
 const H = 60 * 60 * 1000;
 const T0 = Date.parse('2026-11-02T14:00:00.000Z');
@@ -74,6 +74,90 @@ describe('computeSla', () => {
   });
 });
 
+describe('SLA pauses (waiting on client)', () => {
+  const base = {
+    status: 'queued' as const,
+    deadline: null,
+    sla_started_at: iso(T0),
+    sla_due_at: iso(T0 + 100 * H),
+    completed_at: null,
+  };
+
+  it('counts closed and open pauses up to a point in time', () => {
+    const pauses = [
+      { started_at: iso(T0 + 10 * H), ended_at: iso(T0 + 20 * H) },
+      { started_at: iso(T0 + 30 * H), ended_at: null },
+    ];
+    expect(pausedMs(pauses, T0 + 15 * H)).toBe(5 * H);
+    expect(pausedMs(pauses, T0 + 40 * H)).toBe(20 * H);
+    expect(pausedMs([], T0)).toBe(0);
+  });
+
+  it('shows paused with the remaining time frozen while waiting on the client', () => {
+    const waiting = {
+      ...base,
+      status: 'waiting_on_client' as const,
+      sla_pauses: [{ started_at: iso(T0 + 10 * H), ended_at: null }],
+    };
+    const early = computeSla(waiting, T0 + 20 * H);
+    const late = computeSla(waiting, T0 + 200 * H);
+    expect(early.state).toBe('paused');
+    expect(early.remaining_ms).toBe(90 * H);
+    expect(late.state).toBe('paused');
+    expect(late.remaining_ms).toBe(90 * H);
+    expect(formatSlaTimer(early)).toBe('Paused, 3d 18h left');
+  });
+
+  it('pushes the due time back by paused time once the clock resumes', () => {
+    const resumed = {
+      ...base,
+      status: 'in_progress' as const,
+      sla_pauses: [{ started_at: iso(T0 + 10 * H), ended_at: iso(T0 + 60 * H) }],
+    };
+    // 110h after start, 50h of it paused: 60h elapsed, 40h left, still on track.
+    const sla = computeSla(resumed, T0 + 110 * H);
+    expect(sla.state).toBe('on_track');
+    expect(sla.due_at).toBe(iso(T0 + 150 * H));
+    expect(sla.remaining_ms).toBe(40 * H);
+    // The at-risk window stays the 100h SLA, not 150h.
+    expect(computeSla(resumed, T0 + 126 * H).state).toBe('at_risk');
+    expect(computeSla(resumed, T0 + 124 * H).state).toBe('on_track');
+  });
+
+  it('scores closed items without the paused time', () => {
+    const done = {
+      ...base,
+      status: 'done' as const,
+      completed_at: iso(T0 + 130 * H),
+      sla_pauses: [{ started_at: iso(T0 + 10 * H), ended_at: iso(T0 + 50 * H) }],
+    };
+    expect(computeSla(done).state).toBe('met');
+  });
+
+  it('does not pause the client deadline or hide a breach', () => {
+    const waiting = {
+      ...base,
+      status: 'waiting_on_client' as const,
+      deadline: iso(T0 + 30 * H),
+      sla_pauses: [{ started_at: iso(T0 + 10 * H), ended_at: null }],
+    };
+    expect(computeSla(waiting, T0 + 20 * H).state).toBe('paused');
+    const sla = computeSla(waiting, T0 + 31 * H);
+    expect(sla.state).toBe('breached');
+    expect(sla.due_at).toBe(iso(T0 + 30 * H));
+  });
+
+  it('opens a pause on waiting_on_client and closes it on any other status', () => {
+    const opened = nextSlaPauses([], 'waiting_on_client', iso(T0));
+    expect(opened).toEqual([{ started_at: iso(T0), ended_at: null }]);
+    expect(nextSlaPauses(opened, 'waiting_on_client', iso(T0 + H))).toEqual(opened);
+    expect(nextSlaPauses(opened, 'done', iso(T0 + 2 * H))).toEqual([
+      { started_at: iso(T0), ended_at: iso(T0 + 2 * H) },
+    ]);
+    expect(nextSlaPauses([], 'in_progress', iso(T0))).toEqual([]);
+  });
+});
+
 describe('delivery queue repository', () => {
   useMockedDb();
 
@@ -93,6 +177,34 @@ describe('delivery queue repository', () => {
 
     const resized = updateDeliveryItem(item.id, { sla_hours: 24 }, T0 + 12 * H)!;
     expect(resized.sla_due_at).toBe(iso(T0 + 24 * H));
+  });
+
+  it('pauses the SLA clock while waiting on the client and stores the interval', () => {
+    const item = createDeliveryItem(
+      { title: 'Collect CV', owner_type: 'offshore', client: 'Dr. B', sla_hours: 48 },
+      T0,
+    );
+    expect(item.sla_pauses).toEqual([]);
+
+    updateDeliveryItem(item.id, { status: 'waiting_on_client' }, T0 + 10 * H);
+    const paused = listDeliveryItems({}, T0 + 100 * H).items.find((i) => i.id === item.id)!;
+    expect(paused.sla.state).toBe('paused');
+    expect(paused.sla.remaining_ms).toBe(38 * H);
+    expect(listDeliveryItems({}, T0 + 100 * H).summary.by_sla.paused).toBe(1);
+
+    const resumed = updateDeliveryItem(item.id, { status: 'in_progress' }, T0 + 110 * H)!;
+    expect(resumed.sla_pauses).toEqual([{ started_at: iso(T0 + 10 * H), ended_at: iso(T0 + 110 * H) }]);
+    // Stored due time stays start + SLA; the pause moves the effective due time.
+    expect(resumed.sla_due_at).toBe(iso(T0 + 48 * H));
+    const after = listDeliveryItems({}, T0 + 120 * H).items.find((i) => i.id === item.id)!;
+    expect(after.sla.state).toBe('on_track');
+    expect(after.sla.due_at).toBe(iso(T0 + 148 * H));
+
+    const created = createDeliveryItem(
+      { title: 'Waiting from the start', owner_type: 'jack', client: 'Dr. B', sla_hours: 24, status: 'waiting_on_client' },
+      T0,
+    );
+    expect(created.sla_pauses).toEqual([{ started_at: iso(T0), ended_at: null }]);
   });
 
   it('rejects blank client and title', () => {
@@ -222,6 +334,33 @@ describe('v11 migration', () => {
     ).map((r) => r.name);
     expect(names.sort()).toEqual(['delivery_items', 'delivery_template_steps', 'delivery_templates']);
     expect(getCurrentVersion(db)).toBeGreaterThanOrEqual(11);
+    db.close();
+  });
+});
+
+describe('v13 migration', () => {
+  it('adds sla_pauses and opens a pause for items already waiting on the client', async () => {
+    const Database = (await import('better-sqlite3')).default;
+    const { runInlineMigrations } = await import('@/main/db/migrations');
+    const { getCurrentVersion, setVersion } = await import('@/main/db/schema-version');
+    const db = new Database(':memory:');
+    runInlineMigrations(db);
+    db.exec('ALTER TABLE delivery_items DROP COLUMN sla_pauses');
+    const insert = db.prepare(
+      `INSERT INTO delivery_items (id, title, owner_type, client, status, sla_started_at, updated_at)
+       VALUES (?, ?, 'jack', 'C', ?, '2026-11-01T00:00:00.000Z', '2026-11-02T09:00:00.000Z')`,
+    );
+    insert.run('w', 'waiting', 'waiting_on_client');
+    insert.run('q', 'queued', 'queued');
+    db.exec('DELETE FROM _schema_version');
+    setVersion(db, 12, 'simulated v12');
+    runInlineMigrations(db);
+    const rows = db.prepare('SELECT id, sla_pauses FROM delivery_items ORDER BY id').all() as Array<{ id: string; sla_pauses: string }>;
+    expect(JSON.parse(rows.find((r) => r.id === 'w')!.sla_pauses)).toEqual([
+      { started_at: '2026-11-02T09:00:00.000Z', ended_at: null },
+    ]);
+    expect(JSON.parse(rows.find((r) => r.id === 'q')!.sla_pauses)).toEqual([]);
+    expect(getCurrentVersion(db)).toBe(13);
     db.close();
   });
 });

@@ -49,16 +49,30 @@ export function isClosedStatus(status: DeliveryStatus): boolean {
 }
 
 /**
+ * Status that pauses the SLA clock. Time spent here is stored as pause
+ * intervals and left out of elapsed SLA time; the client deadline, a hard
+ * date, keeps running.
+ */
+export const SLA_PAUSE_STATUS: DeliveryStatus = 'waiting_on_client';
+
+/** One stretch of time the SLA clock was paused. `ended_at` is null while it is still paused. */
+export interface SlaPause {
+  started_at: string;
+  ended_at: string | null;
+}
+
+/**
  * SLA states.
  *  - none: no SLA hours and no deadline set.
  *  - on_track: open, more than the at-risk share of the window left.
  *  - at_risk: open, inside the last 25% of the window (or the last 24h when
  *    the window start is unknown).
  *  - breached: open and past due.
+ *  - paused: waiting on the client with time left; the remaining time is frozen.
  *  - met: closed on or before the due time.
  *  - missed: closed after the due time.
  */
-export const SLA_STATES = ['none', 'on_track', 'at_risk', 'breached', 'met', 'missed'] as const;
+export const SLA_STATES = ['none', 'on_track', 'at_risk', 'breached', 'paused', 'met', 'missed'] as const;
 export type SlaState = (typeof SLA_STATES)[number];
 
 export const SLA_STATE_LABELS: Record<SlaState, string> = {
@@ -66,6 +80,7 @@ export const SLA_STATE_LABELS: Record<SlaState, string> = {
   on_track: 'On track',
   at_risk: 'At risk',
   breached: 'Breached',
+  paused: 'Paused',
   met: 'Met',
   missed: 'Missed',
 };
@@ -91,8 +106,10 @@ export interface DeliveryItem {
   sla_hours: number | null;
   /** When the SLA clock started (ISO). */
   sla_started_at: string;
-  /** sla_started_at + sla_hours (ISO). Null when sla_hours is null. */
+  /** sla_started_at + sla_hours (ISO), before pauses. Null when sla_hours is null. */
   sla_due_at: string | null;
+  /** Times the item sat in `waiting_on_client`. Their length pushes the SLA due time back. */
+  sla_pauses: SlaPause[];
   completed_at: string | null;
   template_id: string | null;
   template_step_id: string | null;
@@ -120,7 +137,7 @@ export type DeliveryItemWithSla = DeliveryItem & { sla: SlaInfo };
 type SlaInput = Pick<
   DeliveryItem,
   'status' | 'deadline' | 'sla_started_at' | 'sla_due_at' | 'completed_at'
->;
+> & { sla_pauses?: SlaPause[] };
 
 function parseMs(iso: string | null): number | null {
   if (!iso) return null;
@@ -128,9 +145,49 @@ function parseMs(iso: string | null): number | null {
   return Number.isNaN(ms) ? null : ms;
 }
 
-/** Earlier of the SLA due time and the client deadline. */
-export function effectiveDueMs(item: Pick<DeliveryItem, 'deadline' | 'sla_due_at'>): number | null {
-  const sla = parseMs(item.sla_due_at);
+/** Paused time up to `until`, in ms. An open pause counts up to `until`. */
+export function pausedMs(pauses: ReadonlyArray<SlaPause> | undefined, until: number): number {
+  let total = 0;
+  for (const p of pauses ?? []) {
+    const start = parseMs(p.started_at);
+    if (start === null || start >= until) continue;
+    const end = Math.min(parseMs(p.ended_at) ?? until, until);
+    if (end > start) total += end - start;
+  }
+  return total;
+}
+
+/** True while the item has an open pause. */
+export function isSlaPaused(item: { sla_pauses?: SlaPause[] }): boolean {
+  return (item.sla_pauses ?? []).some((p) => p.ended_at === null);
+}
+
+/**
+ * Close any open pause and, when `status` pauses the clock, open a new one.
+ * Returns the same array when nothing changes.
+ */
+export function nextSlaPauses(
+  pauses: ReadonlyArray<SlaPause>,
+  status: DeliveryStatus,
+  atIso: string,
+): SlaPause[] {
+  const open = pauses.some((p) => p.ended_at === null);
+  const wantOpen = status === SLA_PAUSE_STATUS;
+  if (open === wantOpen) return [...pauses];
+  if (wantOpen) return [...pauses, { started_at: atIso, ended_at: null }];
+  return pauses.map((p) => (p.ended_at === null ? { ...p, ended_at: atIso } : p));
+}
+
+/**
+ * Earlier of the SLA due time and the client deadline. `paused` (ms) pushes
+ * the SLA due time back; the deadline does not move.
+ */
+export function effectiveDueMs(
+  item: Pick<DeliveryItem, 'deadline' | 'sla_due_at'>,
+  paused = 0,
+): number | null {
+  const base = parseMs(item.sla_due_at);
+  const sla = base === null ? null : base + paused;
   const deadline = parseMs(item.deadline);
   if (sla === null) return deadline;
   if (deadline === null) return sla;
@@ -138,23 +195,30 @@ export function effectiveDueMs(item: Pick<DeliveryItem, 'deadline' | 'sla_due_at
 }
 
 export function computeSla(item: SlaInput, now: number = Date.now()): SlaInfo {
-  const due = effectiveDueMs(item);
+  const closed = isClosedStatus(item.status);
+  const until = closed ? (parseMs(item.completed_at) ?? now) : now;
+  const due = effectiveDueMs(item, pausedMs(item.sla_pauses, until));
   if (due === null) return { state: 'none', due_at: null, remaining_ms: null };
   const dueIso = new Date(due).toISOString();
 
-  if (isClosedStatus(item.status)) {
+  if (closed) {
     // Cancelled work has no SLA outcome worth scoring.
     if (item.status === 'cancelled') return { state: 'none', due_at: dueIso, remaining_ms: null };
-    const finished = parseMs(item.completed_at) ?? now;
-    const remaining = due - finished;
+    const remaining = due - until;
     return { state: remaining >= 0 ? 'met' : 'missed', due_at: dueIso, remaining_ms: remaining };
   }
 
   const remaining = due - now;
+  // A pause does not hide a breach that already happened (or a passed deadline).
   if (remaining < 0) return { state: 'breached', due_at: dueIso, remaining_ms: remaining };
+  if (item.status === SLA_PAUSE_STATUS && isSlaPaused(item)) {
+    return { state: 'paused', due_at: dueIso, remaining_ms: remaining };
+  }
 
+  // The at-risk window is the SLA length itself, without the paused time.
   const start = parseMs(item.sla_started_at);
-  const window = start !== null && due > start ? due - start : null;
+  const baseDue = effectiveDueMs(item);
+  const window = start !== null && baseDue !== null && baseDue > start ? baseDue - start : null;
   const riskThreshold = window !== null ? window * AT_RISK_FRACTION : AT_RISK_FALLBACK_MS;
   return {
     state: remaining <= riskThreshold ? 'at_risk' : 'on_track',
@@ -184,6 +248,7 @@ export function formatSlaTimer(sla: SlaInfo): string {
   if (sla.remaining_ms === null) return '';
   if (sla.state === 'met') return 'Met';
   if (sla.state === 'missed') return `Missed by ${formatDuration(sla.remaining_ms)}`;
+  if (sla.state === 'paused') return `Paused, ${formatDuration(sla.remaining_ms)} left`;
   if (sla.remaining_ms < 0) return `${formatDuration(sla.remaining_ms)} over`;
   return `${formatDuration(sla.remaining_ms)} left`;
 }
@@ -194,9 +259,10 @@ export function compareQueueItems(a: DeliveryItemWithSla, b: DeliveryItemWithSla
     breached: 0,
     at_risk: 1,
     on_track: 2,
-    none: 3,
-    missed: 4,
-    met: 5,
+    paused: 3,
+    none: 4,
+    missed: 5,
+    met: 6,
   };
   const r = rank[a.sla.state] - rank[b.sla.state];
   if (r !== 0) return r;

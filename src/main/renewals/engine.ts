@@ -27,7 +27,7 @@ import {
   dueDateToDeadlineIso,
   reachedTriggers,
   renewalTaskTitle,
-  todayUtc,
+  renewalToday,
   type Renewal,
   type RenewalReminder,
 } from '@/shared/renewals';
@@ -132,7 +132,7 @@ export function runRenewalEngine(now: number = Date.now()): EngineRunResult {
     reminders: [],
     created_items: [],
   };
-  const today = todayUtc(now);
+  const today = renewalToday(now);
   for (const r of listRenewals({}, now)) {
     result.checked += 1;
     processRenewal(r, today, now, result);

@@ -9,8 +9,10 @@
  *
  * All date math lives here so the main-process engine, the API and the
  * renderer compute the same trigger dates, states and next due dates. Dates
- * are calendar days (`YYYY-MM-DD`) evaluated in UTC. Keep this module free of
- * Node and DOM imports.
+ * are calendar days (`YYYY-MM-DD`). "Today" and due-day deadlines follow the
+ * America/New_York calendar (`RENEWAL_TIME_ZONE`), so a reminder fires on
+ * Jack's calendar day, not the UTC one. Keep this module free of Node and DOM
+ * imports.
  */
 
 import type { DeliveryOwnerType } from './delivery';
@@ -114,14 +116,58 @@ function msToDate(ms: number): string {
   return `${pad(d.getUTCFullYear(), 4)}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
 }
 
-/** Today's calendar date in UTC. */
-export function todayUtc(now: number = Date.now()): string {
-  return msToDate(now);
+/** Calendar used for "today", reminder days and due-day deadlines. */
+export const RENEWAL_TIME_ZONE = 'America/New_York';
+
+let zoneFormat: Intl.DateTimeFormat | null = null;
+
+/** Wall-clock parts of `ms` in RENEWAL_TIME_ZONE, as a UTC timestamp (seconds precision). */
+function zoneWallMs(ms: number): number {
+  zoneFormat ??= new Intl.DateTimeFormat('en-US', {
+    timeZone: RENEWAL_TIME_ZONE,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+  const parts: Record<string, number> = {};
+  for (const p of zoneFormat.formatToParts(new Date(ms))) {
+    if (p.type !== 'literal') parts[p.type] = Number(p.value);
+  }
+  return Date.UTC(parts.year!, parts.month! - 1, parts.day!, parts.hour! % 24, parts.minute!, parts.second!);
 }
 
-/** Current month as `YYYY-MM` in UTC. */
+/** Calendar date of an instant in RENEWAL_TIME_ZONE. */
+export function dateInRenewalZone(ms: number): string {
+  return msToDate(zoneWallMs(ms));
+}
+
+/** Calendar date of an ISO timestamp in RENEWAL_TIME_ZONE, or null when it does not parse. */
+export function isoToRenewalDate(iso: string): string | null {
+  const ms = Date.parse(iso);
+  return Number.isNaN(ms) ? null : dateInRenewalZone(ms);
+}
+
+/** The instant `date` begins (00:00) in RENEWAL_TIME_ZONE. */
+export function renewalDayStartMs(date: string): number {
+  const wall = dateMs(date);
+  // Offset at a first guess, then again at the result so DST changes land right.
+  let t = wall - (zoneWallMs(wall) - wall);
+  t = wall - (zoneWallMs(t) - t);
+  return t;
+}
+
+/** Today's calendar date in RENEWAL_TIME_ZONE (America/New_York). */
+export function renewalToday(now: number = Date.now()): string {
+  return dateInRenewalZone(now);
+}
+
+/** Current month as `YYYY-MM` in RENEWAL_TIME_ZONE. */
 export function monthOf(now: number = Date.now()): string {
-  return todayUtc(now).slice(0, 7);
+  return renewalToday(now).slice(0, 7);
 }
 
 export function addDays(date: string, days: number): string {
@@ -149,10 +195,11 @@ export function addMonths(date: string, months: number): string {
 
 /**
  * The Delivery queue deadline for a renewal due on `date`: the end of that
- * calendar day in UTC, so a renewal due today is not breached until tomorrow.
+ * calendar day in America/New_York, so a renewal due today is not breached
+ * until tomorrow on Jack's calendar.
  */
 export function dueDateToDeadlineIso(date: string): string {
-  return new Date(dateMs(date) + MS_PER_DAY - 1000).toISOString();
+  return new Date(renewalDayStartMs(addDays(date, 1)) - 1000).toISOString();
 }
 
 /* -------------------------------------------------------------------------- */
@@ -355,7 +402,7 @@ export function computeRenewalSchedule(
   r: Pick<Renewal, 'due_date' | 'lead_times' | 'recurrence' | 'active'>,
   now: number = Date.now(),
 ): RenewalSchedule {
-  const today = todayUtc(now);
+  const today = renewalToday(now);
   return {
     state: renewalState(r.due_date, r.lead_times, today, r.active),
     days_until: daysBetween(today, r.due_date),
