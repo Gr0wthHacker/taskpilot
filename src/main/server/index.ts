@@ -61,6 +61,7 @@ import { contextRouter } from './routes/context';
 import { costRouter } from './routes/cost';
 import { dataRouter, systemRouter } from './routes/data';
 import { decisionsRouter, decisionsRootRouter } from './routes/decisions';
+import { deliveryRouter } from './routes/delivery';
 import { desktopRouter } from './routes/desktop';
 import { feedbackRouter } from './routes/feedback';
 import { githubRouter } from './routes/github';
@@ -401,6 +402,8 @@ function buildApp(options: BuildAppOptions): Application {
   app.use('/api/goals', goalsRouter());
   // Per-business status surface (projects.json driven).
   app.use('/api/businesses', businessesRouter());
+  // Client delivery queue + templates (T693/T694).
+  app.use('/api/delivery', deliveryRouter());
   // Publishing pipeline (long-form → DEAI → atomized → scheduled → published).
   app.use('/api/content', contentRouter());
   // Morning brief — auto-generated daily CEO update.

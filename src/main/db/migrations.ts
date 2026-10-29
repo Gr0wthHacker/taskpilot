@@ -781,6 +781,77 @@ CREATE INDEX IF NOT EXISTS idx_briefing_histories_generated_at
 `;
 
 /**
+ * Schema v11 — delivery queue (T693) and delivery templates (T694).
+ *
+ * Client delivery work lives in its own tables, separate from Jack's personal
+ * `tasks`: every row carries an owner role (jack / contractor / offshore), a
+ * client, a venture and an SLA clock. Templates are named step lists with a
+ * default owner role and SLA per step; instantiating one for a client writes
+ * `delivery_items`. All statements are idempotent.
+ */
+const V11_SQL = `
+CREATE TABLE IF NOT EXISTS delivery_templates (
+  id TEXT PRIMARY KEY,
+  slug TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  description TEXT,
+  venture TEXT,
+  sop_url TEXT,
+  source_ref TEXT,
+  builtin INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS delivery_template_steps (
+  id TEXT PRIMARY KEY,
+  template_id TEXT NOT NULL REFERENCES delivery_templates(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL,
+  section TEXT,
+  title TEXT NOT NULL,
+  description TEXT,
+  owner_role TEXT NOT NULL CHECK (owner_role IN ('jack','contractor','offshore')),
+  sla_hours REAL,
+  sla_confirmed INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_delivery_template_steps_template
+  ON delivery_template_steps(template_id, position);
+
+CREATE TABLE IF NOT EXISTS delivery_items (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT,
+  owner_type TEXT NOT NULL CHECK (owner_type IN ('jack','contractor','offshore')),
+  owner_name TEXT,
+  client TEXT NOT NULL,
+  venture TEXT,
+  status TEXT NOT NULL DEFAULT 'queued'
+    CHECK (status IN ('queued','in_progress','waiting_on_client','blocked','done','cancelled')),
+  deadline TEXT,
+  sla_hours REAL,
+  sla_started_at TEXT NOT NULL,
+  sla_due_at TEXT,
+  completed_at TEXT,
+  template_id TEXT REFERENCES delivery_templates(id) ON DELETE SET NULL,
+  template_step_id TEXT REFERENCES delivery_template_steps(id) ON DELETE SET NULL,
+  instance_id TEXT,
+  position INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_delivery_items_status_due
+  ON delivery_items(status, sla_due_at);
+CREATE INDEX IF NOT EXISTS idx_delivery_items_owner
+  ON delivery_items(owner_type, owner_name);
+CREATE INDEX IF NOT EXISTS idx_delivery_items_client
+  ON delivery_items(client);
+CREATE INDEX IF NOT EXISTS idx_delivery_items_instance
+  ON delivery_items(instance_id, position);
+`;
+
+/**
  * Returns true when `sqlite_master` already contains the baseline `tasks`
  * table. Used to short-circuit the inline runner so drizzle owns the schema
  * lifecycle once it's been run at least once.
@@ -918,6 +989,11 @@ export function runInlineMigrations(db: Database.Database): boolean {
       db.exec(V10_SQL);
       applied.push('observer v2 (observation_events + context_state + research_threads + suggestions + auto_approvals + briefing_histories)');
     }
+    // v11: delivery_items + delivery_templates + delivery_template_steps.
+    if (currentVersion < 11) {
+      db.exec(V11_SQL);
+      applied.push('delivery queue + templates');
+    }
     if (applied.length > 0) {
       setVersion(
         db,
@@ -935,6 +1011,7 @@ export function runInlineMigrations(db: Database.Database): boolean {
   }
 
   db.exec(SCHEMA_SQL);
+  db.exec(V11_SQL);
   setVersion(db, CURRENT_SCHEMA_VERSION, 'inline baseline');
   return true;
 }
