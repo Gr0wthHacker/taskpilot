@@ -32,3 +32,5 @@ process.env.TASKPILOT_HOME = path.join(TEST_HOME, '.taskpilot');
 // The dedicated `tests/api-auth.test.ts` builds the middleware standalone
 // to exercise the real auth path. See `src/main/server/middleware/auth.ts`.
 process.env.TASKPILOT_DISABLE_AUTH = '1';
+// Keep the hourly renewal engine (T704) out of route integration runs.
+process.env.TASKPILOT_DISABLE_RENEWALS = '1';

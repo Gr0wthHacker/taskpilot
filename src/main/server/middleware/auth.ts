@@ -61,6 +61,9 @@ const AUTH_ALLOWLIST_PREFIX: readonly string[] = [
   // endpoints at `/api/webhooks/configs/*` are NOT allowlisted — those
   // mutate registry state and must require the bearer token.
   '/api/webhooks/incoming/',
+  // T707 client portal. Read-only pages gated by a signed, expiring,
+  // revocable token in the path (see `@/main/portal/links`), not the bearer.
+  '/portal/',
 ];
 
 /**
@@ -230,13 +233,35 @@ function parseHost(value: string): { host: string; port: string | null } {
  */
 export function hostCheckMiddleware(options: {
   acceptedPorts?: ReadonlyArray<number>;
+  /**
+   * Public hostnames (e.g. a tunnel or reverse proxy in front of the API)
+   * accepted ONLY for `/portal/*`, on any port. Defaults to the
+   * comma-separated TASKPILOT_PORTAL_HOSTS env var. Every other path still
+   * requires a loopback Host header.
+   */
+  portalHosts?: ReadonlyArray<string>;
 } = {}): RequestHandler {
   const acceptedPorts = new Set<string>(
     (options.acceptedPorts ?? [API_PORT]).map((p) => String(p)),
   );
+  const portalHosts = new Set<string>(
+    (options.portalHosts ?? (process.env.TASKPILOT_PORTAL_HOSTS ?? '').split(','))
+      .map((h) => h.trim().toLowerCase())
+      .filter(Boolean),
+  );
 
   return (req: Request, res: Response, next: NextFunction): void => {
     const raw = req.headers.host;
+    if (
+      portalHosts.size > 0 &&
+      typeof raw === 'string' &&
+      req.path.startsWith('/portal/') &&
+      req.method === 'GET' &&
+      portalHosts.has(parseHost(raw).host.toLowerCase())
+    ) {
+      next();
+      return;
+    }
     if (typeof raw !== 'string' || raw.length === 0) {
       res.status(403).json({
         error: {
