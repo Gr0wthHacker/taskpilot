@@ -26,7 +26,7 @@ import {
   type PortalWorkItem,
   type PortalWorkStatus,
 } from '@/shared/portal';
-import { RENEWAL_ITEM_TYPE_LABELS, monthOf } from '@/shared/renewals';
+import { RENEWAL_ITEM_TYPE_LABELS, isoToRenewalDate, monthOf } from '@/shared/renewals';
 
 import { listPortalEntries } from './entries';
 
@@ -49,8 +49,9 @@ function toWorkItem(item: DeliveryItem): PortalWorkItem {
   return {
     title: item.title,
     status: workStatus(item),
-    completed_on: item.status === 'done' && item.completed_at ? item.completed_at.slice(0, 10) : null,
-    due_on: item.deadline ? item.deadline.slice(0, 10) : null,
+    // Calendar days on the New York calendar, matching renewal deadlines (end of day there).
+    completed_on: item.status === 'done' && item.completed_at ? isoToRenewalDate(item.completed_at) : null,
+    due_on: item.deadline ? isoToRenewalDate(item.deadline) : null,
     url: isSafeHttpUrl(item.deliverable_url) ? item.deliverable_url : null,
   };
 }

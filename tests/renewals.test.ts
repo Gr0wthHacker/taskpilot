@@ -24,7 +24,9 @@ import {
   addMonths,
   computeRenewalSchedule,
   dueDateToDeadlineIso,
+  isoToRenewalDate,
   leadTimeTriggers,
+  monthOf,
   nextDueDate,
   nextTrigger,
   normalizeLeadTimes,
@@ -32,6 +34,7 @@ import {
   parseRecurrence,
   reachedTriggers,
   renewalState,
+  renewalToday,
 } from '@/shared/renewals';
 
 const at = (date: string, time = '12:00:00'): number => Date.parse(`${date}T${time}.000Z`);
@@ -84,7 +87,39 @@ describe('shared renewal math', () => {
     expect(renewalState('2027-03-01', [90], '2027-03-01')).toBe('due_soon');
     expect(renewalState('2027-03-01', [90], '2027-03-02')).toBe('overdue');
     expect(renewalState('2027-03-01', [90], '2027-03-02', false)).toBe('inactive');
-    expect(dueDateToDeadlineIso('2027-03-01')).toBe('2027-03-01T23:59:59.000Z');
+    // End of the due day in New York (EST in March before the DST switch).
+    expect(dueDateToDeadlineIso('2027-03-01')).toBe('2027-03-02T04:59:59.000Z');
+  });
+});
+
+describe('renewal dates use America/New_York calendar days', () => {
+  it('takes today from the New York calendar, not UTC', () => {
+    // 01:30 UTC on Mar 1 is still Feb 28 in New York.
+    expect(renewalToday(Date.parse('2027-03-01T01:30:00Z'))).toBe('2027-02-28');
+    expect(renewalToday(Date.parse('2027-03-01T05:30:00Z'))).toBe('2027-03-01');
+    // Summer (EDT, UTC-4).
+    expect(renewalToday(Date.parse('2027-07-01T03:59:00Z'))).toBe('2027-06-30');
+    expect(renewalToday(Date.parse('2027-07-01T04:00:00Z'))).toBe('2027-07-01');
+    expect(monthOf(Date.parse('2027-08-01T02:00:00Z'))).toBe('2027-07');
+  });
+
+  it('ends a due day at midnight New York time across DST', () => {
+    expect(dueDateToDeadlineIso('2027-07-15')).toBe('2027-07-16T03:59:59.000Z');
+    // Spring forward is Mar 14, 2027; fall back is Nov 7, 2027.
+    expect(dueDateToDeadlineIso('2027-03-13')).toBe('2027-03-14T04:59:59.000Z');
+    expect(dueDateToDeadlineIso('2027-03-14')).toBe('2027-03-15T03:59:59.000Z');
+    expect(dueDateToDeadlineIso('2027-11-06')).toBe('2027-11-07T03:59:59.000Z');
+    expect(dueDateToDeadlineIso('2027-11-07')).toBe('2027-11-08T04:59:59.000Z');
+    expect(isoToRenewalDate('2027-03-02T04:59:59.000Z')).toBe('2027-03-01');
+  });
+
+  it('fires a lead-time reminder on the New York day, not the UTC day', () => {
+    const r = { due_date: '2027-03-01', lead_times: [90], recurrence: 'none', active: true };
+    // The 90-day trigger is 2026-12-01. At 02:00 UTC on Dec 1 it is still Nov 30 in New York.
+    expect(computeRenewalSchedule(r, Date.parse('2026-12-01T02:00:00Z')).state).toBe('upcoming');
+    expect(computeRenewalSchedule(r, Date.parse('2026-12-01T05:00:00Z')).state).toBe('due_soon');
+    expect(computeRenewalSchedule(r, Date.parse('2027-03-02T03:00:00Z')).state).toBe('due_soon');
+    expect(computeRenewalSchedule(r, Date.parse('2027-03-02T05:00:00Z')).state).toBe('overdue');
   });
 });
 
@@ -129,7 +164,7 @@ describe('renewal engine', () => {
     expect(item.client).toBe('Practice A');
     expect(item.owner_type).toBe('contractor');
     expect(item.owner_name).toBe('Maria');
-    expect(item.deadline).toBe('2027-03-01T23:59:59.000Z');
+    expect(item.deadline).toBe('2027-03-02T04:59:59.000Z'); // end of Mar 1 in New York
     expect(item.client_visible).toBe(true);
 
     // Same day again: idempotent.
