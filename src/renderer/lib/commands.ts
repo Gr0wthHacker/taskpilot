@@ -19,6 +19,7 @@ import {
   Brain,
   CalendarCheck,
   CalendarClock,
+  ClipboardList,
   CalendarDays,
   CheckSquare,
   Eye,
@@ -198,6 +199,14 @@ export function getStaticCommands(): PaletteCommand[] {
       icon: CalendarClock,
       keywords: ['schedule', 'schedules', 'recurring', 'cron', 'fan-out', 'sparman'],
       run: (ctx) => ctx.navigate('/schedules'),
+    },
+    {
+      id: 'nav.delivery',
+      label: 'Go to Delivery',
+      group: 'navigate',
+      icon: ClipboardList,
+      keywords: ['delivery', 'queue', 'sla', 'contractor', 'offshore', 'client', 'templates'],
+      run: (ctx) => ctx.navigate('/delivery'),
     },
     {
       id: 'nav.io',

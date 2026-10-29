@@ -28,6 +28,7 @@ const Reports = lazy(() => import('./views/Reports'));
 const StatusReportView = lazy(() => import('./views/StatusReportView'));
 const About = lazy(() => import('./views/About'));
 const Schedules = lazy(() => import('./views/Schedules'));
+const Delivery = lazy(() => import('./views/Delivery'));
 const Templates = lazy(() => import('./views/Templates'));
 const Archive = lazy(() => import('./views/Archive'));
 const ImportView = lazy(() => import('./views/Import'));
@@ -107,6 +108,7 @@ export const router = createHashRouter([
       { path: 'knowledge', element: withSuspense(<Knowledge />) },
       { path: 'reports', element: withSuspense(<Reports />) },
       { path: 'schedules', element: withSuspense(<Schedules />) },
+      { path: 'delivery', element: withSuspense(<Delivery />) },
       { path: 'reports/status', element: withSuspense(<StatusReportView />) },
       { path: 'about', element: withSuspense(<About />) },
       { path: 'templates', element: withSuspense(<Templates />) },
