@@ -7,9 +7,11 @@
  * returns 0 rather than guessing. The user can plug missing rates in via
  * the `model_pricing_override` setting (a JSON object keyed by model name).
  *
- * Sources (rounded to the nearest USD): Anthropic + OpenAI public pricing
- * pages as of May 2026. Cache-read tokens follow Anthropic's "10% of input
- * price" guidance; cache-creation is "1.25× input" (write-time fee).
+ * Sources: Anthropic pricing, Oct 2026 (Claude rows); OpenAI public pricing
+ * as of May 2026. Cache-read tokens are 10% of input except where a row says
+ * otherwise (Opus 5.5 / Sonnet 5.5 read at $0.20, Fable 5.1 at $0.25);
+ * cache-creation is 1.25× input (5-minute TTL write fee). 1-hour TTL writes
+ * bill at 2× input and are priced here as 5-minute writes.
  */
 
 import { settingsRepository } from '@/main/db/repositories/settings';
@@ -41,12 +43,26 @@ export interface ModelPricing {
  */
 export const HARDCODED_PRICING: Readonly<Record<string, ModelPricing>> = {
   /* Claude (Anthropic) ------------------------------------------------ */
-  'claude-opus-4-7': { input: 15, output: 75, cache_read: 1.5, cache_creation: 18.75 },
-  'claude-opus-4-6': { input: 15, output: 75, cache_read: 1.5, cache_creation: 18.75 },
+  // Every current model id has its own row: the prefix fallback below would
+  // otherwise price `claude-opus-5-5` / `claude-opus-4-8` from an older row.
+  'claude-fable-5-1': { input: 10, output: 50, cache_read: 0.25, cache_creation: 12.5 },
+  'claude-fable-5': { input: 10, output: 50, cache_read: 1, cache_creation: 12.5 },
+  'claude-opus-5-5': { input: 4, output: 20, cache_read: 0.2, cache_creation: 5 },
+  'claude-opus-5': { input: 5, output: 25, cache_read: 0.5, cache_creation: 6.25 },
+  'claude-opus-4-8': { input: 5, output: 25, cache_read: 0.5, cache_creation: 6.25 },
+  'claude-opus-4-7': { input: 5, output: 25, cache_read: 0.5, cache_creation: 6.25 },
+  'claude-opus-4-6': { input: 5, output: 25, cache_read: 0.5, cache_creation: 6.25 },
+  'claude-opus-4-5': { input: 5, output: 25, cache_read: 0.5, cache_creation: 6.25 },
+  // Opus 4 / 4.1 (the old $15/$75 tier) — also the fallback for unknown claude-opus-4-* ids.
   'claude-opus-4': { input: 15, output: 75, cache_read: 1.5, cache_creation: 18.75 },
+  'claude-sonnet-5-5': { input: 2, output: 10, cache_read: 0.2, cache_creation: 2.5 },
+  'claude-sonnet-5': { input: 2, output: 10, cache_read: 0.2, cache_creation: 2.5 },
   'claude-sonnet-4-6': { input: 3, output: 15, cache_read: 0.3, cache_creation: 3.75 },
   'claude-sonnet-4-5': { input: 3, output: 15, cache_read: 0.3, cache_creation: 3.75 },
   'claude-sonnet-4': { input: 3, output: 15, cache_read: 0.3, cache_creation: 3.75 },
+  // Haiku 5.5 rate applies to prompts up to 100K tokens.
+  'claude-haiku-5-5': { input: 0.1, output: 0.5, cache_read: 0.01, cache_creation: 0.125 },
+  'claude-haiku-4-5': { input: 1, output: 5, cache_read: 0.1, cache_creation: 1.25 },
   'claude-haiku-4': { input: 0.8, output: 4, cache_read: 0.08, cache_creation: 1 },
   'claude-haiku-3-5': { input: 0.8, output: 4, cache_read: 0.08, cache_creation: 1 },
 
