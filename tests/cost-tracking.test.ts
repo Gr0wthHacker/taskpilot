@@ -48,8 +48,8 @@ describe('cost-tracking', () => {
     it('finds opus 4.7 rates', () => {
       const p = lookupPricing('claude-opus-4-7');
       expect(p).not.toBeNull();
-      expect(p?.input).toBe(15);
-      expect(p?.output).toBe(75);
+      expect(p?.input).toBe(5);
+      expect(p?.output).toBe(25);
     });
 
     it('finds sonnet 4.6 rates', () => {
@@ -70,6 +70,17 @@ describe('cost-tracking', () => {
       expect(p?.input).toBe(15);
     });
 
+    it('prices current Claude ids from their own rows, not an older prefix', () => {
+      // Anthropic pricing, Oct 2026.
+      expect(lookupPricing('claude-opus-5-5')).toMatchObject({ input: 4, output: 20, cache_read: 0.2 });
+      expect(lookupPricing('claude-opus-4-8')).toMatchObject({ input: 5, output: 25 });
+      expect(lookupPricing('claude-sonnet-5-5')).toMatchObject({ input: 2, output: 10, cache_read: 0.2 });
+      expect(lookupPricing('claude-haiku-4-5-20251001')).toMatchObject({ input: 1, output: 5 });
+      expect(lookupPricing('claude-haiku-5-5')).toMatchObject({ input: 0.1, output: 0.5 });
+      expect(lookupPricing('claude-fable-5-1')).toMatchObject({ input: 10, output: 50, cache_read: 0.25 });
+      expect(lookupPricing('claude-opus-4-1')?.input).toBe(15);
+    });
+
     it('respects user override', () => {
       settingsRepository.set('model_pricing_override', {
         'custom-model': { input: 1, output: 2 },
@@ -86,23 +97,23 @@ describe('cost-tracking', () => {
 
   describe('computeCost', () => {
     it('computes opus 4.7 cost from input + output tokens', () => {
-      // 1M input @ $15, 1M output @ $75 → $90 total.
+      // 1M input @ $5, 1M output @ $25 → $30 total (Anthropic pricing, Oct 2026).
       expect(
         computeCost({
           model: 'claude-opus-4-7',
           input: 1_000_000,
           output: 1_000_000,
         }),
-      ).toBe(90);
+      ).toBe(30);
     });
 
     it('handles partial token counts', () => {
-      // 1k output tokens at $75/M = $0.075.
+      // 1k output tokens at $25/M = $0.025.
       const usd = computeCost({
         model: 'claude-opus-4-7',
         output: 1_000,
       });
-      expect(usd).toBeCloseTo(0.075, 6);
+      expect(usd).toBeCloseTo(0.025, 6);
     });
 
     it('returns 0 for unknown model', () => {
@@ -121,21 +132,21 @@ describe('cost-tracking', () => {
     });
 
     it('applies cache-read discount', () => {
-      // Cache-read defaults to 10% of input → 1M cache_read @ opus is $1.50.
+      // Cache-read defaults to 10% of input → 1M cache_read @ opus 4.7 is $0.50.
       const usd = computeCost({
         model: 'claude-opus-4-7',
         cache_read: 1_000_000,
       });
-      expect(usd).toBeCloseTo(1.5, 6);
+      expect(usd).toBeCloseTo(0.5, 6);
     });
 
     it('applies cache-creation premium', () => {
-      // Cache-creation defaults to 125% of input → 1M creation @ opus is $18.75.
+      // Cache-creation defaults to 125% of input → 1M creation @ opus 4.7 is $6.25.
       const usd = computeCost({
         model: 'claude-opus-4-7',
         cache_creation: 1_000_000,
       });
-      expect(usd).toBeCloseTo(18.75, 6);
+      expect(usd).toBeCloseTo(6.25, 6);
     });
   });
 
@@ -190,15 +201,15 @@ describe('cost-tracking', () => {
 
       const summary = aggregateCost('30d');
       expect(summary.events).toBe(2);
-      // 3M input @ $15/M = $45.
-      expect(summary.total_usd).toBeCloseTo(45, 4);
+      // 3M input @ $5/M = $15.
+      expect(summary.total_usd).toBeCloseTo(15, 4);
 
       const biotech = summary.by_tag.find((e) => e.key === 'biotech');
       expect(biotech).toBeDefined();
-      expect(biotech?.total_usd).toBeCloseTo(45, 4);
+      expect(biotech?.total_usd).toBeCloseTo(15, 4);
 
       const research = summary.by_tag.find((e) => e.key === 'research');
-      expect(research?.total_usd).toBeCloseTo(15, 4);
+      expect(research?.total_usd).toBeCloseTo(5, 4);
     });
 
     it('sums by model', () => {
@@ -216,7 +227,7 @@ describe('cost-tracking', () => {
       expect(summary.by_model.length).toBeGreaterThanOrEqual(2);
       const opus = summary.by_model.find((e) => e.key === 'claude-opus-4-7');
       const sonnet = summary.by_model.find((e) => e.key === 'claude-sonnet-4-6');
-      expect(opus?.total_usd).toBeCloseTo(15, 4);
+      expect(opus?.total_usd).toBeCloseTo(5, 4);
       expect(sonnet?.total_usd).toBeCloseTo(3, 4);
     });
 
@@ -239,8 +250,8 @@ describe('cost-tracking', () => {
       const summary = aggregateCost();
       const leal = summary.by_workspace.find((e) => e.key === 'leal');
       const reddit = summary.by_workspace.find((e) => e.key === 'reddit');
-      expect(leal?.total_usd).toBeCloseTo(15, 4);
-      expect(reddit?.total_usd).toBeCloseTo(30, 4);
+      expect(leal?.total_usd).toBeCloseTo(5, 4);
+      expect(reddit?.total_usd).toBeCloseTo(10, 4);
     });
 
     it('returns empty summary when no events', () => {

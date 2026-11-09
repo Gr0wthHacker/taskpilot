@@ -20,14 +20,30 @@
  *    by a strict tokenizer (no env-expansion, no globbing).
  *  - Honors `agent_paused` — skips the tick when paused.
  *  - Bounds stdout/stderr capture to 64 KB per stream to keep RAM in check.
+ *  - Skips the spawn while every request queue is empty (default `/tp-watch`
+ *    command only). Each idle `claude -p` start still loads Claude Code's
+ *    system prompt, tools and CLAUDE.md and runs at least one model turn, so a
+ *    60 s tick on an empty queue burned ~1,440 headless runs a day. A
+ *    heartbeat run still fires every `claude_runner_idle_heartbeat_ms`
+ *    (30 min default) in case the skill does periodic work beyond the queues.
+ *    `scripts/run-ambient-deliberate.ps1` already short-circuits the same way.
  */
 
 import { spawn, type ChildProcess } from 'node:child_process';
+import fs from 'node:fs';
 import os from 'node:os';
+import path from 'node:path';
 
 import { settingsRepository } from '@/main/db/repositories/settings';
 import { isAgentPaused } from '@/main/auto-execute';
-import { TASKPILOT_HOME } from '@/shared/constants';
+import {
+  IO_DELIBERATE,
+  IO_DERIVE,
+  IO_EXECUTE,
+  IO_MEMORY_ENRICH,
+  IO_SUMMARIZE,
+  TASKPILOT_HOME,
+} from '@/shared/constants';
 
 /* -------------------------------------------------------------------------- */
 /*  Settings keys + defaults                                                  */
@@ -39,6 +55,8 @@ export const SETTING_INTERVAL_MS = 'claude_runner_interval_ms';
 export const SETTING_TIMEOUT_MS = 'claude_runner_timeout_ms';
 export const SETTING_WORKDIR = 'claude_runner_workdir';
 export const SETTING_LAST_RUN = 'claude_runner_last_run';
+export const SETTING_SKIP_WHEN_IDLE = 'claude_runner_skip_when_idle';
+export const SETTING_IDLE_HEARTBEAT_MS = 'claude_runner_idle_heartbeat_ms';
 
 const DEFAULT_INTERVAL_MS = 60_000; // every 60s — debounced if a run is in flight
 const DEFAULT_TIMEOUT_MS = 5 * 60_000; // 5 min hard ceiling per run
@@ -49,6 +67,58 @@ const DEFAULT_TIMEOUT_MS = 5 * 60_000; // 5 min hard ceiling per run
 const DEFAULT_COMMAND =
   process.platform === 'win32' ? 'claude.cmd -p /tp-watch' : 'claude -p /tp-watch';
 const MAX_CAPTURE_BYTES = 64 * 1024;
+const DEFAULT_IDLE_HEARTBEAT_MS = 30 * 60_000;
+
+/**
+ * Request queues the app writes and the `/tp-watch` runner drains. Built on
+ * call, not at import, so modules that import this file never touch the
+ * constants until a tick actually runs.
+ */
+export function runnerRequestDirs(): string[] {
+  return [IO_EXECUTE, IO_DERIVE, IO_DELIBERATE, IO_SUMMARIZE, IO_MEMORY_ENRICH];
+}
+
+/** Count `*.json` request files (atomic-write `.tmp` files excluded). A missing dir counts as empty. */
+export function countPendingRequests(dirs: readonly string[] = runnerRequestDirs()): number {
+  let n = 0;
+  for (const dir of dirs) {
+    try {
+      for (const entry of fs.readdirSync(dir)) {
+        if (entry.toLowerCase().endsWith('.json') && fs.statSync(path.join(dir, entry)).isFile()) n += 1;
+      }
+    } catch {
+      /* missing or unreadable dir: nothing pending there */
+    }
+  }
+  return n;
+}
+
+export interface IdleGateInput {
+  argv: readonly string[];
+  pending: number;
+  /** ISO start time of the last real run, if any. */
+  lastStartedAt: string | null;
+  now: number;
+  skipWhenIdle: boolean;
+  /** Spawn anyway once the last run is this old. 0 or less: never spawn while idle. */
+  heartbeatMs: number;
+}
+
+/**
+ * True when this tick should NOT spawn: the gate is on, the command is the
+ * queue-draining `/tp-watch` runner (a custom command may do anything, so it
+ * always runs), nothing is queued, and the heartbeat is not due.
+ */
+export function shouldSkipIdleTick(input: IdleGateInput): boolean {
+  if (!input.skipWhenIdle) return false;
+  if (!input.argv.some((a) => a.includes('/tp-watch'))) return false;
+  if (input.pending > 0) return false;
+  if (!input.lastStartedAt) return false;
+  if (input.heartbeatMs <= 0) return true;
+  const last = Date.parse(input.lastStartedAt);
+  if (!Number.isFinite(last)) return false;
+  return input.now - last < input.heartbeatMs;
+}
 
 /* -------------------------------------------------------------------------- */
 /*  Public surface                                                            */
@@ -74,6 +144,8 @@ export interface RunnerStatus {
   timeout_ms: number;
   workdir: string;
   last_run: RunnerLastRun | null;
+  /** Ticks skipped since boot because every request queue was empty. */
+  idle_skips: number;
 }
 
 export interface RunnerHandle {
@@ -205,6 +277,7 @@ export function startClaudeRunner(): RunnerHandle {
   let current: ChildProcess | null = null;
   let stopping = false;
   let lastRun: RunnerLastRun | null = readLastRun();
+  let idleSkips = 0;
 
   function scheduleNext(intervalMs: number): void {
     if (stopping) return;
@@ -215,7 +288,7 @@ export function startClaudeRunner(): RunnerHandle {
     if (typeof timer.unref === 'function') timer.unref();
   }
 
-  async function tickOnce(): Promise<RunnerLastRun | null> {
+  async function tickOnce(force = false): Promise<RunnerLastRun | null> {
     const intervalMs = readIntSetting(SETTING_INTERVAL_MS, DEFAULT_INTERVAL_MS);
     // Re-read settings on every tick so toggling in the UI takes effect
     // without a restart.
@@ -237,6 +310,21 @@ export function startClaudeRunner(): RunnerHandle {
     const commandRaw = readStringSetting(SETTING_COMMAND, DEFAULT_COMMAND);
     const argv = tokenizeCommand(commandRaw);
     if (argv.length === 0) {
+      scheduleNext(intervalMs);
+      return null;
+    }
+    if (
+      !force &&
+      shouldSkipIdleTick({
+        argv,
+        pending: countPendingRequests(),
+        lastStartedAt: lastRun?.started_at ?? null,
+        now: Date.now(),
+        skipWhenIdle: readBoolSetting(SETTING_SKIP_WHEN_IDLE, true),
+        heartbeatMs: readIntSetting(SETTING_IDLE_HEARTBEAT_MS, DEFAULT_IDLE_HEARTBEAT_MS),
+      })
+    ) {
+      idleSkips += 1;
       scheduleNext(intervalMs);
       return null;
     }
@@ -341,6 +429,7 @@ export function startClaudeRunner(): RunnerHandle {
       timeout_ms: readIntSetting(SETTING_TIMEOUT_MS, DEFAULT_TIMEOUT_MS),
       workdir: readStringSetting(SETTING_WORKDIR, os.homedir() || TASKPILOT_HOME),
       last_run: lastRun,
+      idle_skips: idleSkips,
     };
   }
 
@@ -372,7 +461,8 @@ export function startClaudeRunner(): RunnerHandle {
       activeHandle = null;
     },
     runNow() {
-      return tickOnce();
+      // A forced run always spawns, even with empty queues.
+      return tickOnce(true);
     },
     status: snapshot,
     refresh() {
